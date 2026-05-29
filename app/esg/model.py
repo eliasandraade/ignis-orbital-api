@@ -27,7 +27,7 @@ class ESGReport(Base):
     heat_spots_detected: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     vegetation_loss_estimated_ha: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     prevented_impact_estimate: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ods: Mapped[dict | None] = mapped_column(
+    ods: Mapped[dict[str, bool] | None] = mapped_column(
         JSON, nullable=True
     )  # {"ods_2": True, "ods_15": True, ...}
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))

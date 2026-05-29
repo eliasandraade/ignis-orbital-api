@@ -51,6 +51,12 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
     op.create_index("ix_missions_incident_id", "missions", ["incident_id"])
     op.create_index("ix_missions_team_id", "missions", ["team_id"])

@@ -33,7 +33,7 @@ class PublicReport(Base):
         ForeignKey("protected_areas.id", ondelete="SET NULL"),
         nullable=True,
     )
-    evidence_urls: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    evidence_urls: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
     validation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     linked_incident_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
