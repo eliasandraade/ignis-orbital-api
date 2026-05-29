@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.health.router import router as health_router
+from app.incidents.router import router as incidents_router
 from app.protected_areas.router import router as protected_areas_router
 from app.reports.router import router as reports_router
 from app.users.router import router as users_router
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(protected_areas_router)
     app.include_router(reports_router)
+    app.include_router(incidents_router)
 
     return app
 
