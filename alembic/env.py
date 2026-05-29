@@ -1,15 +1,23 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
+from app.audit.model import AuditLog  # noqa: F401
 from app.config import get_settings
 from app.database import Base
+from app.esg.model import ESGReport  # noqa: F401
+from app.evidence.model import Evidence  # noqa: F401
+from app.incidents.model import Incident, IncidentEvent  # noqa: F401
+from app.missions.model import Mission  # noqa: F401
+from app.protected_areas.model import ProtectedArea  # noqa: F401
+from app.reports.model import PublicReport  # noqa: F401
+from app.resources.model import Resource  # noqa: F401
 
-# Importar todos os models aqui para que o autogenerate os detecte
-# Fases 2+: adicionar imports conforme models forem criados
-# Exemplo: from app.users.model import User  # noqa: F401
+# Importar todos os models para que o Alembic detecte as tabelas
+from app.teams.model import FieldTeam  # noqa: F401
+from app.users.model import User  # noqa: F401
 
 config = context.config
 
