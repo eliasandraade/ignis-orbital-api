@@ -16,9 +16,9 @@ class IncidentRead(BaseModel):
     type: str
     severity: str
     status: str
-    protected_area_id: uuid.UUID
-    latitude: float
-    longitude: float
+    protected_area_id: uuid.UUID | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     location_wkt: str | None = None
     source: str
     confidence: float

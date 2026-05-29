@@ -1,7 +1,7 @@
 import random
 import string
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -119,6 +119,11 @@ async def convert_to_incident(
     if report.linked_incident_id is not None:
         raise ConflictException("Reporte já foi convertido em incidente")
 
+    location_wkt = (
+        f"POINT({report.longitude} {report.latitude})"
+        if report.latitude is not None and report.longitude is not None
+        else None
+    )
     incident = Incident(
         code=_generate_code(),
         title=f"Incidente originado de denúncia {report.protocol}",
@@ -128,7 +133,7 @@ async def convert_to_incident(
         protected_area_id=report.protected_area_id,
         latitude=report.latitude,
         longitude=report.longitude,
-        location=f"POINT({report.longitude} {report.latitude})",
+        location=location_wkt,
         source=IncidentSource.REPORT,
         confidence=0.7,
         detected_at=report.created_at,

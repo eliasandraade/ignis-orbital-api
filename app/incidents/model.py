@@ -22,13 +22,13 @@ class Incident(Base):
         String(20), nullable=False, index=True
     )  # IncidentSeverity
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)  # IncidentStatus
-    protected_area_id: Mapped[uuid.UUID] = mapped_column(
+    protected_area_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("protected_areas.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("protected_areas.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    latitude: Mapped[float] = mapped_column(Float, nullable=False)
-    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[WKBElement | None] = mapped_column(Geometry("POINT", srid=4326), nullable=True)
     source: Mapped[str] = mapped_column(
         String(50), nullable=False, default="report"
