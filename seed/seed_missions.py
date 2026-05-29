@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.incidents.model import Incident
@@ -36,6 +37,7 @@ async def seed_missions(db: AsyncSession) -> None:
     print("  -> Seeding missions...")
     now = datetime.now(UTC)
 
+    added = 0
     for m in MISSIONS:
         incident = await get_or_none(db, Incident, code=m["incident_code"])
         team = await get_or_none(db, FieldTeam, name=m["team_name"])
@@ -45,6 +47,18 @@ async def seed_missions(db: AsyncSession) -> None:
             continue
         if team is None:
             print(f"  -> WARNING: team '{m['team_name']}' not found, skipping mission")
+            continue
+
+        # Deduplication: skip if a mission for the same incident, team and objective already exists
+        result = await db.execute(
+            select(Mission).where(
+                Mission.incident_id == incident.id,
+                Mission.team_id == team.id,
+                Mission.objective == m["objective"],
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
             continue
 
         started_at = None
@@ -60,6 +74,7 @@ async def seed_missions(db: AsyncSession) -> None:
             started_at=started_at,
         )
         db.add(mission)
+        added += 1
 
     await db.flush()
-    print(f"  -> Missions OK ({len(MISSIONS)} entries added)")
+    print(f"  -> Missions OK ({added} entries added, {len(MISSIONS) - added} skipped)")

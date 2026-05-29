@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from geoalchemy2 import WKTElement
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.incidents.model import Incident, IncidentEvent
@@ -160,18 +161,25 @@ async def seed_incidents(db: AsyncSession) -> None:
 
     await db.flush()
 
-    # Adiciona eventos ao incidente principal
+    # Adiciona eventos ao incidente principal (idempotente)
     incident_0041 = await get_or_none(db, Incident, code="IGN-CE-2026-0041")
     if incident_0041 is not None:
-        for j, ev in enumerate(EVENTS_0041):
-            event = IncidentEvent(
-                incident_id=incident_0041.id,
-                type=ev["type"],
-                actor_name=ev["actor_name"],
-                description=ev["description"],
-                timestamp=now - timedelta(hours=12 - j * 3),
-            )
-            db.add(event)
-        await db.flush()
+        result = await db.execute(
+            select(func.count())
+            .select_from(IncidentEvent)
+            .where(IncidentEvent.incident_id == incident_0041.id)
+        )
+        event_count = result.scalar()
+        if event_count == 0:
+            for j, ev in enumerate(EVENTS_0041):
+                event = IncidentEvent(
+                    incident_id=incident_0041.id,
+                    type=ev["type"],
+                    actor_name=ev["actor_name"],
+                    description=ev["description"],
+                    timestamp=now - timedelta(hours=12 - j * 3),
+                )
+                db.add(event)
+            await db.flush()
 
     print(f"  -> Incidents OK ({len(INCIDENTS)} entries checked)")

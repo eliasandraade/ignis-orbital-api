@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.esg.model import ESGReport
@@ -31,6 +32,18 @@ async def seed_esg(db: AsyncSession) -> None:
     print("  -> Seeding ESG reports...")
 
     area = await get_or_none(db, ProtectedArea, name=ESG["area_name"])
+
+    # Deduplication: skip if a report for the same area and period already exists
+    result = await db.execute(
+        select(ESGReport).where(
+            ESGReport.protected_area_id == (area.id if area else None),
+            ESGReport.period_start == ESG["period_start"],
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        print("  -> ESG reports OK (already exists, skipped)")
+        return
 
     report = ESGReport(
         protected_area_id=area.id if area else None,

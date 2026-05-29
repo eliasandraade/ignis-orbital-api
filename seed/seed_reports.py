@@ -2,6 +2,7 @@ import random
 import string
 
 from geoalchemy2 import WKTElement
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.incidents.model import Incident
@@ -162,7 +163,21 @@ async def seed_reports(db: AsyncSession) -> None:
     incident_0041 = await get_or_none(db, Incident, code="IGN-CE-2026-0041")
 
     reporter_idx = 0
+    added = 0
     for report_data in REPORTS_DATA:
+        # Deduplication: skip if a report with the same type and description already exists
+        result = await db.execute(
+            select(PublicReport).where(
+                PublicReport.type == report_data["type"],
+                PublicReport.description == report_data["description"],
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            if not report_data.get("is_anonymous", False):
+                reporter_idx += 1
+            continue
+
         area = await get_or_none(db, ProtectedArea, name=report_data["area_name"])
         is_anonymous = report_data.get("is_anonymous", False)
         status = report_data["status"]
@@ -206,6 +221,7 @@ async def seed_reports(db: AsyncSession) -> None:
             evidence_urls=[],
         )
         db.add(report)
+        added += 1
 
     await db.flush()
-    print(f"  -> Public reports OK ({len(REPORTS_DATA)} entries added)")
+    print(f"  -> Public reports OK ({added} entries added, {len(REPORTS_DATA) - added} skipped)")
