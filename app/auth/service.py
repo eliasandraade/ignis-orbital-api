@@ -1,9 +1,13 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.exceptions import CredentialsException
 from app.core.security import create_access_token, verify_password
 from app.users.model import User
+from app.users.schemas import UserRead
+
+settings = get_settings()
 
 
 async def login_user(db: AsyncSession, email: str, password: str) -> dict:
@@ -15,7 +19,6 @@ async def login_user(db: AsyncSession, email: str, password: str) -> dict:
     return {
         "access_token": token,
         "token_type": "bearer",
-        "role": user.role,
-        "user_id": str(user.id),
-        "name": user.name,
+        "expires_in": settings.jwt_access_token_expire_minutes * 60,
+        "user": UserRead.model_validate(user),
     }

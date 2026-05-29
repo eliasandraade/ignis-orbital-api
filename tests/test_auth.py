@@ -80,7 +80,8 @@ async def test_login_valid(client, db_with_user):
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
-    assert data["role"] == "gestor"
+    assert "expires_in" in data
+    assert data["user"]["role"] == "gestor"
 
 
 @pytest.mark.asyncio

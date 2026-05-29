@@ -43,6 +43,15 @@ async def create_user(
     return user
 
 
+@router.get("/{user_id}", response_model=UserRead)
+async def get_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.ADMIN)),
+):
+    return await user_service.get_user(db, user_id)
+
+
 @router.patch("/{user_id}", response_model=UserRead)
 async def update_user(
     user_id: uuid.UUID,
@@ -54,6 +63,25 @@ async def update_user(
     await log_action(
         db,
         "user.updated",
+        "User",
+        str(user_id),
+        actor_name=current_user.name,
+        actor_id=current_user.id,
+    )
+    await db.commit()
+    return user
+
+
+@router.delete("/{user_id}", response_model=UserRead)
+async def delete_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.ADMIN)),
+):
+    user = await user_service.delete_user(db, user_id)
+    await log_action(
+        db,
+        "user.deleted",
         "User",
         str(user_id),
         actor_name=current_user.name,

@@ -18,8 +18,8 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         db,
         "user.login",
         "User",
-        result["user_id"],
-        actor_name=result["name"],
+        str(result["user"].id),
+        actor_name=result["user"].name,
     )
     await db.commit()
     return result

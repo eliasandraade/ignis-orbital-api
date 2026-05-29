@@ -51,6 +51,17 @@ async def create_user(db: AsyncSession, data: UserCreate) -> UserRead:
     return UserRead.model_validate(user)
 
 
+async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> UserRead:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise NotFoundException("Usuário")
+    user.is_active = False
+    user.updated_at = datetime.now(UTC)
+    await db.flush()
+    return UserRead.model_validate(user)
+
+
 async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate) -> UserRead:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
