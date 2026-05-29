@@ -36,7 +36,12 @@ async def get_current_user(
     except jwt.PyJWTError as exc:
         raise CredentialsException() from exc
 
-    result = await db.execute(select(User).where(User.id == UUID(user_id)))
+    try:
+        uid = UUID(user_id)
+    except (ValueError, AttributeError) as exc:
+        raise CredentialsException() from exc
+
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise CredentialsException()
