@@ -5,10 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
 from app.config import get_settings
+from app.evidence.router import router as evidence_router
 from app.health.router import router as health_router
 from app.incidents.router import router as incidents_router
+from app.missions.router import router as missions_router
 from app.protected_areas.router import router as protected_areas_router
 from app.reports.router import router as reports_router
+from app.resources.router import router as resources_router
+from app.teams.router import router as teams_router
 from app.users.router import router as users_router
 
 settings = get_settings()
@@ -52,6 +56,10 @@ def create_app() -> FastAPI:
     app.include_router(protected_areas_router)
     app.include_router(reports_router)
     app.include_router(incidents_router)
+    app.include_router(teams_router)
+    app.include_router(resources_router)
+    app.include_router(missions_router)
+    app.include_router(evidence_router)
 
     return app
 
