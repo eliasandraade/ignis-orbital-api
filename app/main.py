@@ -18,6 +18,7 @@ from app.reports.router import router as reports_router
 from app.resources.router import router as resources_router
 from app.teams.router import router as teams_router
 from app.users.router import router as users_router
+from app.war_room.router import router as war_room_router
 
 settings = get_settings()
 
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(esg_router)
     app.include_router(audit_router)
     app.include_router(admin_stats_router)
+    app.include_router(war_room_router)
 
     return app
 

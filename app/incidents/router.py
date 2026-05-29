@@ -36,14 +36,32 @@ async def list_incidents(
     return await incident_service.list_incidents(db, page, size, type, severity, status, area_id)
 
 
-# IMPORTANT: /war-room must be registered BEFORE /{incident_id} to avoid FastAPI
-# treating "war-room" as a UUID path parameter and returning 422.
+# IMPORTANT: static routes must be registered BEFORE /{incident_id}
 @router.get("/war-room", response_model=WarRoomSummary)
 async def get_war_room(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_role(UserRole.GESTOR)),
 ) -> WarRoomSummary:
     return await incident_service.get_war_room(db)
+
+
+@router.get(
+    "/active/critical",
+    response_model=Page[IncidentRead],
+    summary="Incidentes ativos críticos",
+    description="Atalho: lista incidentes com status=active e severity=critical.",
+)
+async def list_active_critical(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.GESTOR)),
+) -> Page[IncidentRead]:
+    return await incident_service.list_incidents(
+        db, page, size,
+        status=IncidentStatus.ACTIVE,
+        severity=IncidentSeverity.CRITICAL,
+    )
 
 
 @router.get("/{incident_id}", response_model=IncidentRead)
@@ -102,6 +120,27 @@ async def update_incident_status(
         actor_name=current_user.name,
         actor_id=current_user.id,
         metadata={"new_status": body.status},
+    )
+    await db.commit()
+    return incident
+
+
+@router.post("/{incident_id}/activate-protocol", response_model=IncidentRead)
+async def activate_protocol(
+    incident_id: uuid.UUID,
+    reason: str = "Protocolo de emergência ativado",
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.GESTOR)),
+) -> IncidentRead:
+    body = IncidentStatusUpdate(status=IncidentStatus.PROTOCOL_ACTIVATED, reason=reason)
+    incident = await incident_service.update_incident_status(db, incident_id, body, current_user)
+    await log_action(
+        db,
+        "incident.protocol_activated",
+        "Incident",
+        str(incident_id),
+        actor_name=current_user.name,
+        actor_id=current_user.id,
     )
     await db.commit()
     return incident

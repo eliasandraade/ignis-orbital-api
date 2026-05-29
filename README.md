@@ -163,12 +163,23 @@ pytest tests/test_health.py -v
 
 ```bash
 # Após migrations aplicadas:
-python seed/seed_all.py
+python -m seed
 ```
 
 > **Nota:** Os dados gerados pelo seed são exclusivamente demonstrativos para fins acadêmicos.
 > Os campos `source = "base demonstrativa acadêmica"` e `data_quality = "estimated"` indicam
 > que não representam dados oficiais de nenhum órgão ambiental.
+
+### Credenciais de teste (seed)
+
+| Perfil | Email | Senha | Acesso |
+|--------|-------|-------|--------|
+| Admin | admin@ignis-orbital.com | admin@123 | Total |
+| Gestor | gestor@semace.ce.gov.br | gestor@123 | Incidentes, denúncias, war room |
+| Órgão | operador@defesacivil.ce.gov.br | operador@123 | Visão operacional, ESG |
+| Campo | campo@ibama.gov.br | campo@123 | Missões, evidências |
+
+> ⚠️ Credenciais **exclusivamente para demonstração/testes locais**. Nunca use em produção.
 
 ---
 
@@ -227,19 +238,18 @@ app/
 
 | Fase | Status | Conteúdo |
 |---|---|---|
-| 0 | ✅ Concluída | Setup, Docker, FastAPI, health/ready |
-| 1 | 🔜 | Database, SQLAlchemy async, Settings |
-| 2 | 🔜 | Models ORM + Alembic migrations |
-| 3 | 🔜 | Seed demonstrativo |
-| 4 | 🔜 | Auth JWT + roles RBAC |
-| 5 | 🔜 | Protected Areas + PostGIS |
-| 6 | 🔜 | Public Reports + protocolos |
-| 7 | 🔜 | Incidents + timeline |
-| 8 | 🔜 | Teams, Resources, Missions |
-| 9 | 🔜 | War Room agregado |
-| 10 | 🔜 | ESG, Aurora rule-based, Admin, Auditoria |
-| 11 | 🔜 | Testes e documentação OpenAPI |
-| 12 | 🔜 | Integração com frontend |
+| 0 | ✅ | Setup, Docker, FastAPI, health/ready |
+| 1+2 | ✅ | Database, SQLAlchemy async, todos os models ORM + Alembic migrations |
+| 3 | ✅ | Seed demonstrativo completo |
+| 4 | ✅ | Auth JWT + RBAC 5 perfis |
+| 5 | ✅ | Protected Areas API + PostGIS |
+| 6 | ✅ | Public Reports + protocolos + workflow (validar, descartar, converter) |
+| 7 | ✅ | Incidents + timeline + War Room |
+| 8 | ✅ | Teams, Resources, Missions, Evidence |
+| 9 | ✅ | Aurora rule-based + ESG reports |
+| 10 | ✅ | Audit log API, admin stats, qualidade final |
+| Auditoria | ✅ | Sub-recursos de área, activate-protocol, war-room alias, privacidade |
+| Frontend | 🔜 | Integração progressiva substituindo src/data/ |
 
 ---
 

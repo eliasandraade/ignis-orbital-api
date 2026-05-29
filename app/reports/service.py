@@ -6,8 +6,8 @@ from datetime import UTC, date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import ReportStatus, ReportUrgency
-from app.core.exceptions import NotFoundException
+from app.core.enums import IncidentSource, IncidentStatus, ReportStatus, ReportUrgency
+from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import Page
 from app.reports.model import PublicReport
 from app.reports.schemas import ReportCreate, ReportRead, ReportStatusUpdate
@@ -92,6 +92,52 @@ async def get_report_by_protocol(db: AsyncSession, protocol: str) -> ReportRead:
     if not report:
         raise NotFoundException("Reporte")
     return ReportRead.model_validate(report)
+
+
+async def convert_to_incident(
+    db: AsyncSession,
+    report_id: uuid.UUID,
+    actor: object,
+) -> object:
+    """Convert a validated/pending public report into an incident. Returns IncidentRead."""
+    from app.incidents.model import Incident
+    from app.incidents.schemas import IncidentRead as IncidentReadSchema
+    from app.incidents.service import _generate_code
+
+    result = await db.execute(select(PublicReport).where(PublicReport.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise NotFoundException("Reporte")
+    if report.status not in (ReportStatus.PENDING, ReportStatus.VALIDATED):
+        raise ConflictException(
+            f"Reporte com status '{report.status}' não pode ser convertido em incidente"
+        )
+    if report.linked_incident_id is not None:
+        raise ConflictException("Reporte já foi convertido em incidente")
+
+    incident = Incident(
+        code=_generate_code(),
+        title=f"Incidente originado de denúncia {report.protocol}",
+        type=report.type,
+        severity="medium",
+        status=IncidentStatus.DETECTED,
+        protected_area_id=report.protected_area_id,
+        latitude=report.latitude,
+        longitude=report.longitude,
+        location=f"POINT({report.longitude} {report.latitude})",
+        source=IncidentSource.REPORT,
+        confidence=0.7,
+        detected_at=report.created_at,
+    )
+    db.add(incident)
+    await db.flush()
+
+    report.linked_incident_id = incident.id
+    report.status = ReportStatus.CONVERTED
+    report.updated_at = datetime.now(UTC)
+    await db.flush()
+
+    return IncidentReadSchema.model_validate(incident)
 
 
 async def update_report_status(

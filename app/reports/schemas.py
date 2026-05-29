@@ -55,6 +55,21 @@ class ReportRead(BaseModel):
         return data
 
 
+class ReportStatusPublic(BaseModel):
+    """Schema seguro para consulta pública por protocolo — não expõe dados pessoais."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    protocol: str
+    type: str
+    urgency: str
+    status: str
+    is_anonymous: bool
+    protected_area_id: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ReportCreate(BaseModel):
     type: ReportType
     description: str

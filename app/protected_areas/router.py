@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
@@ -30,6 +31,78 @@ async def get_area(
     db: AsyncSession = Depends(get_db),
 ):
     return await area_service.get_area(db, area_id)
+
+
+@router.get("/{area_id}/incidents")
+async def list_area_incidents(
+    area_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.GESTOR)),
+):
+    from sqlalchemy import func
+
+    from app.core.pagination import Page as PageType
+    from app.incidents.model import Incident
+    from app.incidents.schemas import IncidentRead
+
+    offset = (page - 1) * size
+    total_result = await db.execute(
+        select(func.count()).select_from(Incident).where(Incident.protected_area_id == area_id)
+    )
+    total = total_result.scalar_one()
+    result = await db.execute(
+        select(Incident)
+        .where(Incident.protected_area_id == area_id)
+        .order_by(Incident.created_at.desc())
+        .offset(offset)
+        .limit(size)
+    )
+    incidents = result.scalars().all()
+    return PageType.create(
+        items=[IncidentRead.model_validate(i) for i in incidents],
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+@router.get("/{area_id}/reports")
+async def list_area_reports(
+    area_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(UserRole.GESTOR)),
+):
+    from sqlalchemy import func
+
+    from app.core.pagination import Page as PageType
+    from app.reports.model import PublicReport
+    from app.reports.schemas import ReportRead
+
+    offset = (page - 1) * size
+    total_result = await db.execute(
+        select(func.count())
+        .select_from(PublicReport)
+        .where(PublicReport.protected_area_id == area_id)
+    )
+    total = total_result.scalar_one()
+    result = await db.execute(
+        select(PublicReport)
+        .where(PublicReport.protected_area_id == area_id)
+        .order_by(PublicReport.created_at.desc())
+        .offset(offset)
+        .limit(size)
+    )
+    reports = result.scalars().all()
+    return PageType.create(
+        items=[ReportRead.model_validate(r) for r in reports],
+        total=total,
+        page=page,
+        size=size,
+    )
 
 
 @router.post("", response_model=ProtectedAreaRead, status_code=status.HTTP_201_CREATED)
