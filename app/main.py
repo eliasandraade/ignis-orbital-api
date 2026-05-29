@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.health.router import router as health_router
+from app.protected_areas.router import router as protected_areas_router
+from app.reports.router import router as reports_router
 from app.users.router import router as users_router
 
 settings = get_settings()
@@ -46,6 +48,8 @@ def create_app() -> FastAPI:
     # Routers de domínio — Fases 4+
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(protected_areas_router)
+    app.include_router(reports_router)
 
     return app
 
