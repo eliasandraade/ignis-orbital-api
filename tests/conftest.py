@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -18,14 +20,15 @@ async def client():
 @pytest.fixture
 async def client_no_db(client):
     """
-    Cliente que sobrescreve a dependência get_db com um stub que lança erro.
-    Use para testar endpoints que NÃO devem precisar de banco.
+    Cliente que injeta uma sessão mock que falha ao executar queries.
+    Permite testar que endpoints lidam corretamente com falhas de banco.
     """
 
-    async def _no_db():
-        raise RuntimeError("Banco não disponível neste contexto de teste")
-        yield  # noqa: unreachable — necessário para ser generator
+    async def _failing_db():
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = Exception("Banco não disponível neste contexto de teste")
+        yield mock_session
 
-    app.dependency_overrides[get_db] = _no_db
+    app.dependency_overrides[get_db] = _failing_db
     yield client
     app.dependency_overrides.clear()
