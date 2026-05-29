@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ignis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ignis_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-ignis_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ignis} -d ${POSTGRES_DB:-ignis_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build: .
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ignis}:${POSTGRES_PASSWORD:-ignis_secret}@db:5432/${POSTGRES_DB:-ignis_db}
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-true}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173,https://ignis-fire-watch-main.vercel.app}
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/app/scripts/entrypoint.sh"]
+
+volumes:
+  postgres_data:

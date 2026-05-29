@@ -1,0 +1,22 @@
+# Padrão: CRLF no checkout Windows, LF no repositório
+* text=auto
+
+# Scripts shell: sempre LF (obrigatório para execução em container Linux)
+*.sh text eol=lf
+
+# Python: LF
+*.py text eol=lf
+
+# TOML / YAML / INI: LF
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+
+# Mako templates: LF
+*.mako text eol=lf
+
+# Binários: sem conversão
+*.png binary
+*.jpg binary
+*.ico binary

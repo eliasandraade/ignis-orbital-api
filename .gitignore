@@ -1,0 +1,57 @@
+# === Ambiente Python ===
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pycache
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# === Cobertura e Testes ===
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# === Ruff / Linters ===
+.ruff_cache/
+.mypy_cache/
+
+# === Variáveis de Ambiente (NUNCA commitar) ===
+.env
+.env.local
+.env.*.local
+.env.production
+
+# === Docker / Dados locais ===
+postgres_data/
+pgdata/
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === Sistema Operacional ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log
+logs/
+
+# === Temporários ===
+*.tmp
+*.bak
