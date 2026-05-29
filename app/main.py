@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.aurora.router import router as aurora_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
+from app.esg.router import router as esg_router
 from app.evidence.router import router as evidence_router
 from app.health.router import router as health_router
 from app.incidents.router import router as incidents_router
@@ -60,6 +62,8 @@ def create_app() -> FastAPI:
     app.include_router(resources_router)
     app.include_router(missions_router)
     app.include_router(evidence_router)
+    app.include_router(aurora_router)
+    app.include_router(esg_router)
 
     return app
 
