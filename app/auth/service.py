@@ -1,0 +1,21 @@
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import CredentialsException
+from app.core.security import create_access_token, verify_password
+from app.users.model import User
+
+
+async def login_user(db: AsyncSession, email: str, password: str) -> dict:
+    result = await db.execute(select(User).where(User.email == email, User.is_active == True))  # noqa: E712
+    user = result.scalar_one_or_none()
+    if not user or not verify_password(password, user.password_hash):
+        raise CredentialsException()
+    token = create_access_token(subject=str(user.id), role=user.role)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": user.role,
+        "user_id": str(user.id),
+        "name": user.name,
+    }

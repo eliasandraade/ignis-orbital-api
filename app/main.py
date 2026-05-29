@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.health.router import router as health_router
+from app.users.router import router as users_router
 
 settings = get_settings()
 
@@ -41,8 +43,9 @@ def create_app() -> FastAPI:
     # Health/readiness — sem prefixo /api/v1 para compatibilidade com infra
     app.include_router(health_router)
 
-    # Routers de domínio serão incluídos aqui com prefixo /api/v1
-    # Fases 4–12
+    # Routers de domínio — Fases 4+
+    app.include_router(auth_router)
+    app.include_router(users_router)
 
     return app
 
