@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ignis_secret}
       POSTGRES_DB: ${POSTGRES_DB:-ignis_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +32,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-in-production}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173,https://ignis-fire-watch-main.vercel.app}
+      # CORS_ORIGINS is not passed here; Settings default list is used.
+      # To override, set CORS_ORIGINS as a JSON array in your .env:
+      # CORS_ORIGINS=["http://localhost:8080","https://yourapp.com"]
     depends_on:
       db:
         condition: service_healthy

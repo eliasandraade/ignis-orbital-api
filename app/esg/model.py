@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, Text
@@ -30,4 +30,4 @@ class ESGReport(Base):
     ods: Mapped[dict[str, bool] | None] = mapped_column(
         JSON, nullable=True
     )  # {"ods_2": True, "ods_15": True, ...}
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

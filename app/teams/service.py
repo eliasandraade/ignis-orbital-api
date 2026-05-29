@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,6 +84,6 @@ async def update_team(
     if data.notes is not None:
         team.notes = data.notes
 
-    team.updated_at = datetime.now(UTC)
+    team.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return FieldTeamRead.model_validate(team)

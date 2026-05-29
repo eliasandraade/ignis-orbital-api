@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -25,8 +25,8 @@ class PublicReport(Base):
     reporter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    latitude: Mapped[float] = mapped_column(Float, nullable=False)
-    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[WKBElement | None] = mapped_column(Geometry("POINT", srid=4326), nullable=True)
     protected_area_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -40,5 +40,5 @@ class PublicReport(Base):
         ForeignKey("incidents.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

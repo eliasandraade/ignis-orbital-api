@@ -19,8 +19,8 @@ class ReportRead(BaseModel):
     reporter_name: str | None = None
     contact: str | None = None
     is_anonymous: bool
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
     location_wkt: str | None = None
     protected_area_id: uuid.UUID | None = None
     evidence_urls: list[str] | None = None
@@ -74,8 +74,8 @@ class ReportCreate(BaseModel):
     type: ReportType
     description: str
     urgency: ReportUrgency
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
     reporter_name: str | None = None
     contact: str | None = None
     is_anonymous: bool = False

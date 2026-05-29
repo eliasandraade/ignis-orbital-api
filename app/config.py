@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 
 from pydantic import field_validator
@@ -31,8 +32,18 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, list):
+            return v
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
+            stripped = v.strip()
+            # Accept JSON array: '["http://...", "https://..."]'
+            if stripped.startswith("["):
+                try:
+                    return json.loads(stripped)
+                except json.JSONDecodeError:
+                    pass
+            # Accept comma-separated: 'http://..., https://...'
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
         return v
 
     @property

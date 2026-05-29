@@ -1,6 +1,6 @@
 import random
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,7 +143,7 @@ async def update_incident(
     if data.temperature is not None:
         incident.temperature = data.temperature
 
-    incident.updated_at = datetime.now(UTC)
+    incident.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return IncidentRead.model_validate(incident)
 
@@ -160,7 +160,7 @@ async def update_incident_status(
         raise NotFoundException("Incidente")
 
     incident.status = data.status
-    incident.updated_at = datetime.now(UTC)
+    incident.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     event = IncidentEvent(
         incident_id=incident.id,
@@ -168,7 +168,7 @@ async def update_incident_status(
         actor_id=actor.id,  # type: ignore[attr-defined]
         actor_name=actor.name,  # type: ignore[attr-defined]
         description=f"Status alterado para {data.status}: {data.reason}",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(event)
     await db.flush()
@@ -204,7 +204,7 @@ async def add_incident_event(
     if not incident:
         raise NotFoundException("Incidente")
 
-    ts = data.timestamp if data.timestamp is not None else datetime.now(UTC)
+    ts = data.timestamp if data.timestamp is not None else datetime.now(timezone.utc).replace(tzinfo=None)
     event = IncidentEvent(
         incident_id=incident_id,
         type=data.type,

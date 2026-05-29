@@ -20,7 +20,11 @@ def _generate_protocol() -> str:
 
 async def create_report(db: AsyncSession, data: ReportCreate) -> ReportRead:
     protocol = _generate_protocol()
-    location_wkt = f"POINT({data.longitude} {data.latitude})"
+    location_wkt = (
+        f"POINT({data.longitude} {data.latitude})"
+        if data.latitude is not None and data.longitude is not None
+        else None
+    )
     report = PublicReport(
         protocol=protocol,
         type=data.type,
@@ -134,7 +138,7 @@ async def convert_to_incident(
 
     report.linked_incident_id = incident.id
     report.status = ReportStatus.CONVERTED
-    report.updated_at = datetime.now(UTC)
+    report.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
 
     return IncidentReadSchema.model_validate(incident)
@@ -153,6 +157,6 @@ async def update_report_status(
     report.status = data.status
     if data.validation_notes is not None:
         report.validation_notes = data.validation_notes
-    report.updated_at = datetime.now(UTC)
+    report.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return ReportRead.model_validate(report)

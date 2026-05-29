@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,7 +93,7 @@ async def update_mission(
     if data.completed_at is not None:
         mission.completed_at = data.completed_at
 
-    mission.updated_at = datetime.now(UTC)
+    mission.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return MissionRead.model_validate(mission)
 
@@ -113,7 +113,7 @@ async def update_mission_status(
     if data.notes is not None:
         mission.notes = data.notes
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if data.status == MissionStatus.ACTIVE and mission.started_at is None:
         mission.started_at = now
     if data.status in (MissionStatus.COMPLETED, MissionStatus.ABORTED):

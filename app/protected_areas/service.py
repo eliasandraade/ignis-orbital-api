@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,7 +106,7 @@ async def update_area(
     if data.confidence is not None:
         area.confidence = data.confidence
 
-    area.updated_at = datetime.now(UTC)
+    area.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return ProtectedAreaRead.model_validate(area)
 
