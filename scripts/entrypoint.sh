@@ -20,6 +20,9 @@ done
 echo "==> [IGNIS Orbital API] Banco disponível. Aplicando migrations..."
 alembic upgrade head
 
+echo "==> [IGNIS Orbital API] Aplicando seed demonstrativo..."
+python -m seed
+
 echo "==> [IGNIS Orbital API] Iniciando servidor..."
 if [ "${APP_ENV:-development}" = "production" ]; then
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
