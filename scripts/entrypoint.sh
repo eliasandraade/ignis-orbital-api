@@ -21,4 +21,8 @@ echo "==> [IGNIS Orbital API] Banco disponível. Aplicando migrations..."
 alembic upgrade head
 
 echo "==> [IGNIS Orbital API] Iniciando servidor..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+if [ "${APP_ENV:-development}" = "production" ]; then
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+else
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+fi
