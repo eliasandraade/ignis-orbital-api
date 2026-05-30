@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         "http://localhost:8080",
         "http://localhost:5173",
         "https://ignis-fire-watch-main.vercel.app",
+        "https://ignis-fire-watch.vercel.app",
     ]
 
     @field_validator("cors_origins", mode="before")
