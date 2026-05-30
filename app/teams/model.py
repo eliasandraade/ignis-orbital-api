@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Float, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, utcnow
 
 
 class FieldTeam(Base):
@@ -21,5 +21,5 @@ class FieldTeam(Base):
     current_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)

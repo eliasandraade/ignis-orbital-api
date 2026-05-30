@@ -1,9 +1,15 @@
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings
+
+
+def utcnow() -> datetime:
+    """Return current UTC time as a naive datetime (no tzinfo) for asyncpg compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 settings = get_settings()
 

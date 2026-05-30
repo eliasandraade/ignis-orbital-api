@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -8,7 +8,7 @@ from sqlalchemy import DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, utcnow
 
 
 class Incident(Base):
@@ -40,8 +40,8 @@ class Incident(Base):
     humidity: Mapped[float | None] = mapped_column(Float, nullable=True)
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
 class IncidentEvent(Base):

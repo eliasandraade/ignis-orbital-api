@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,7 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> UserRead:
     if not user:
         raise NotFoundException("Usuário")
     user.is_active = False
-    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await db.flush()
     return UserRead.model_validate(user)
 
@@ -79,6 +79,6 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate) ->
         user.is_active = data.is_active
     if data.password is not None:
         user.password_hash = hash_password(data.password)
-    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await db.flush()
     return UserRead.model_validate(user)

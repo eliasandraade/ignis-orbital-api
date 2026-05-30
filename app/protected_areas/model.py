@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -8,7 +8,7 @@ from sqlalchemy import Float, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, utcnow
 
 
 class ProtectedArea(Base):
@@ -38,5 +38,5 @@ class ProtectedArea(Base):
     )
     center_lat: Mapped[float] = mapped_column(Float, nullable=False)
     center_lng: Mapped[float] = mapped_column(Float, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ async def log_action(
         entity_type=entity_type,
         entity_id=str(entity_id),
         metadata_json=metadata or {},
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(log)
     # sem commit aqui — operação principal faz o commit

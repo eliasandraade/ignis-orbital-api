@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, utcnow
 
 
 class ESGReport(Base):
@@ -30,4 +30,4 @@ class ESGReport(Base):
     ods: Mapped[dict[str, bool] | None] = mapped_column(
         JSON, nullable=True
     )  # {"ods_2": True, "ods_15": True, ...}
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)

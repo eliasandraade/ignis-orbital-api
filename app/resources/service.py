@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,6 +88,6 @@ async def update_resource(
     if data.assigned_incident_id is not None:
         resource.assigned_incident_id = data.assigned_incident_id
 
-    resource.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    resource.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await db.flush()
     return ResourceRead.model_validate(resource)

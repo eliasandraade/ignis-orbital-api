@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String
@@ -27,6 +27,6 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
         index=True,
     )

@@ -1,7 +1,7 @@
 import random
 import string
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,7 +143,7 @@ async def convert_to_incident(
 
     report.linked_incident_id = incident.id
     report.status = ReportStatus.CONVERTED
-    report.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    report.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await db.flush()
 
     return IncidentReadSchema.model_validate(incident)
@@ -162,6 +162,6 @@ async def update_report_status(
     report.status = data.status
     if data.validation_notes is not None:
         report.validation_notes = data.validation_notes
-    report.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    report.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await db.flush()
     return ReportRead.model_validate(report)

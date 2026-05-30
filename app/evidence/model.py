@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from geoalchemy2 import Geometry
@@ -8,7 +8,7 @@ from sqlalchemy import Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, utcnow
 
 
 class Evidence(Base):
@@ -34,4 +34,4 @@ class Evidence(Base):
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[WKBElement | None] = mapped_column(Geometry("POINT", srid=4326), nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
