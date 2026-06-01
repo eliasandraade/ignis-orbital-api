@@ -55,3 +55,6 @@ logs/
 # === Temporários ===
 *.tmp
 *.bak
+
+# === Ferramentas de desenvolvimento ===
+.gstack/
