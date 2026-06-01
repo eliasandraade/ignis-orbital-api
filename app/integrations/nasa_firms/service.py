@@ -1,18 +1,19 @@
 """NASA FIRMS service layer.
 
-Handles the disabled/ready-state when NASA_FIRMS_MAP_KEY is absent.
-Full ingest logic is prepared but guarded behind the key check so that
-the API boots cleanly in environments where the key has not been configured.
+When NASA_FIRMS_ENABLED=true and NASA_FIRMS_MAP_KEY is set, ingest_viirs()
+fetches real VIIRS SNPP NRT data, parses rows, and caches results in memory.
+list_alerts() reads from that cache; falls back to demo data otherwise so
+the frontend always has content to display.
 
-When the key is present, calling `ingest_viirs` fetches recent VIIRS data,
-parses and deduplicates rows, and returns a summary.  Actual persistence to
-the database (orbital_alerts table) will be wired in the migration phase.
+API key guard: the key is never logged or included in error messages.
 """
 
+import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
+from app.integrations._cache import cache_get, cache_set
 from app.integrations.nasa_firms import client as firms_client
 from app.integrations.nasa_firms.client import MissingApiKeyError
 from app.integrations.nasa_firms.schemas import (
@@ -21,15 +22,15 @@ from app.integrations.nasa_firms.schemas import (
     OrbitalAlertListResponse,
 )
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Default bbox for CE/PI/MA/TO coverage (lng_min,lat_min,lng_max,lat_max)
-_DEFAULT_BBOX = "-45.0,-12.0,-34.5,2.5"
+_CACHE_KEY = "nasa_firms:alerts"
 
 # Confidence string mappings from FIRMS CSV
 _CONFIDENCE_MAP = {"low": 25, "nominal": 60, "high": 90}
 
-# Demo alerts used when key is absent or ingest has not run yet
+# Demo alerts — always available as fallback when key is absent or ingest hasn't run
 _DEMO_ALERTS: list[OrbitalAlert] = [
     OrbitalAlert(
         id="demo-firms-001",
@@ -82,7 +83,6 @@ def _csv_row_to_alert(row: dict) -> OrbitalAlert | None:
         lat = float(row["latitude"])
         lng = float(row["longitude"])
         confidence = _parse_confidence(row.get("confidence", "50"))
-        # Skip very low confidence rows (likely false positives)
         if confidence < 25:
             return None
 
@@ -108,62 +108,133 @@ def _csv_row_to_alert(row: dict) -> OrbitalAlert | None:
         return None
 
 
-def list_alerts() -> OrbitalAlertListResponse:
-    """Return current list of orbital alerts.
+def get_cached_nasa_alerts() -> list[OrbitalAlert] | None:
+    """Return cached NASA FIRMS alerts, or None if cache is empty/expired."""
+    cached = cache_get(_CACHE_KEY)
+    if cached is None:
+        return None
+    return [OrbitalAlert.model_validate(a) for a in cached]
 
-    Returns demo data with disabled status when the API key is absent.
-    Actual database reads will be added in the persistence phase.
+
+def list_alerts() -> OrbitalAlertListResponse:
+    """Return NASA FIRMS orbital alerts (backwards-compatible single-provider endpoint).
+
+    When NASA_FIRMS_ENABLED=true and key is set, reads from in-memory cache.
+    Otherwise returns demo data so the frontend always has content.
+    Prefer get_aggregated_alerts() (orbital_alerts_service) for full multi-source view.
     """
     has_key = bool(settings.nasa_firms_map_key)
-    status = "disabled_missing_api_key" if not has_key else "live"
+    enabled = settings.nasa_firms_enabled
+
+    if enabled and has_key:
+        cached_alerts = get_cached_nasa_alerts()
+        if cached_alerts is not None:
+            return OrbitalAlertListResponse(
+                items=cached_alerts,
+                total=len(cached_alerts),
+                source_status="cached",
+                cached_at=datetime.now(UTC).isoformat(),
+                providers_successful=["nasa_firms"],
+            )
+        # Enabled + key present but cache empty (ingest not yet run)
+        return OrbitalAlertListResponse(
+            items=_DEMO_ALERTS,
+            total=len(_DEMO_ALERTS),
+            source_status="live",
+            cached_at=datetime.now(UTC).isoformat(),
+            fallback_used=True,
+        )
 
     return OrbitalAlertListResponse(
         items=_DEMO_ALERTS,
         total=len(_DEMO_ALERTS),
-        source_status=status,  # type: ignore[arg-type]
+        source_status="disabled_missing_api_key",
         since=None,
         cached_at=datetime.now(UTC).isoformat(),
+        fallback_used=True,
     )
 
 
 async def ingest_viirs(bbox: str | None = None) -> IngestResponse:
-    """Trigger a NASA FIRMS VIIRS ingestion run.
+    """Fetch NASA FIRMS VIIRS data and persist to in-memory cache.
 
-    Returns disabled status clearly when the API key is absent.
-    When the key is present, fetches CSV and parses rows (persistence
-    to orbital_alerts table will be wired after the migration is created).
+    Guards:
+    - Returns disabled status when NASA_FIRMS_MAP_KEY is absent.
+    - Returns disabled status when NASA_FIRMS_ENABLED=false.
+    - On HTTP/network error returns error status without propagating (safe fallback).
+    API key is never logged or exposed in error messages.
     """
-    if not settings.nasa_firms_map_key:
+    has_key = bool(settings.nasa_firms_map_key)
+    enabled = settings.nasa_firms_enabled
+
+    if not has_key:
         return IngestResponse(
             status="disabled_missing_api_key",
             message=(
                 "Ingestão NASA FIRMS desabilitada: NASA_FIRMS_MAP_KEY não configurada. "
-                "Cadastre-se em firms.modaps.eosdis.nasa.gov e configure a variável no Railway."
+                "Cadastre-se em firms.modaps.eosdis.nasa.gov e configure a variável."
             ),
+            fallback_used=True,
         )
 
+    if not enabled:
+        return IngestResponse(
+            status="disabled_missing_api_key",
+            message="Ingestão NASA FIRMS desabilitada: NASA_FIRMS_ENABLED=false.",
+            fallback_used=True,
+        )
+
+    effective_bbox = bbox or settings.fire_bbox
+    target_date = (datetime.now(UTC) - timedelta(days=settings.fire_lookback_days)).strftime(
+        "%Y-%m-%d"
+    )
+
     try:
-        rows = await firms_client.fetch_viirs_csv(bbox or _DEFAULT_BBOX)
+        rows = await firms_client.fetch_viirs_csv(bbox=effective_bbox, date=target_date)
     except MissingApiKeyError as exc:
         return IngestResponse(
             status="disabled_missing_api_key",
             message=str(exc),
+            fallback_used=True,
         )
     except Exception as exc:
+        logger.warning("NASA FIRMS fetch error: %s", type(exc).__name__)
         return IngestResponse(
             status="error",
-            message=f"Erro ao buscar dados NASA FIRMS: {exc}",
+            message=f"Erro ao buscar dados NASA FIRMS: {type(exc).__name__}",
+            errors=[f"NASA FIRMS: {type(exc).__name__}"],
+            fallback_used=True,
         )
 
-    alerts = [a for row in rows if (a := _csv_row_to_alert(row)) is not None]
+    fetched = len(rows)
+    alerts: list[OrbitalAlert] = []
+    skipped = 0
+    for row in rows:
+        alert = _csv_row_to_alert(row)
+        if alert is None:
+            skipped += 1
+        else:
+            alerts.append(alert)
+
+    ttl = settings.external_api_cache_ttl_minutes * 60
+    cache_set(_CACHE_KEY, [a.model_dump(mode="json") for a in alerts], ttl)
+    logger.info(
+        "NASA FIRMS ingest: fetched=%d parsed=%d skipped=%d date=%s",
+        fetched,
+        len(alerts),
+        skipped,
+        target_date,
+    )
+
     return IngestResponse(
         status="ok",
         message=(
-            f"Ingestão VIIRS concluída. {len(alerts)} focos válidos "
-            f"de {len(rows)} linhas recebidas. "
-            "Persistência em banco será ativada após criação da migration orbital_alerts."
+            f"NASA FIRMS VIIRS: {len(alerts)} focos ingeridos "
+            f"de {fetched} linhas ({skipped} descartados por confiança baixa)."
         ),
-        records_fetched=len(rows),
+        records_fetched=fetched,
         records_inserted=len(alerts),
-        records_skipped=len(rows) - len(alerts),
+        records_skipped=skipped,
+        providers_successful=["nasa_firms"],
+        fallback_used=False,
     )

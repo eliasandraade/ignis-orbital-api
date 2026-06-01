@@ -24,6 +24,11 @@ class OrbitalAlertListResponse(BaseModel):
     source_status: Literal["live", "cached", "disabled_missing_api_key", "unavailable"]
     since: str | None = None
     cached_at: str | None = None
+    # v2 fields — optional, backwards-compatible with existing frontend
+    providers_attempted: list[str] = []
+    providers_successful: list[str] = []
+    fallback_used: bool = False
+    errors: list[str] = []
 
 
 class IngestResponse(BaseModel):
@@ -32,6 +37,10 @@ class IngestResponse(BaseModel):
     records_fetched: int = 0
     records_inserted: int = 0
     records_skipped: int = 0
+    # v2 fields — optional, backwards-compatible
+    providers_successful: list[str] = []
+    fallback_used: bool = False
+    errors: list[str] = []
 
 
 class ConvertToIncidentRequest(BaseModel):
