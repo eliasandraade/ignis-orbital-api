@@ -25,9 +25,22 @@ class Settings(BaseSettings):
 
     # External API base URLs
     open_meteo_base_url: str = "https://api.open-meteo.com/v1"
+
+    # NASA FIRMS — requires free API key from firms.modaps.eosdis.nasa.gov
     nasa_firms_map_key: str = ""
     nasa_firms_base_url: str = "https://firms.modaps.eosdis.nasa.gov/api"
+    nasa_firms_enabled: bool = False
+    fire_bbox: str = "-45.0,-12.0,-34.5,2.5"  # CE/PI/MA/TO (lng_min,lat_min,lng_max,lat_max)
+    fire_lookback_days: int = 1
+
+    # INPE TerraBrasilis WFS — public, no key required
+    inpe_queimadas_enabled: bool = False
+    inpe_queimadas_url: str = "https://terrabrasilis.dpi.inpe.br/geoserver/ows"
+
+    # OpenStreetMap / Nominatim
     osm_nominatim_base_url: str = "https://nominatim.openstreetmap.org"
+
+    # Shared HTTP settings
     external_api_timeout_seconds: int = 10
     external_api_cache_ttl_minutes: int = 60
 

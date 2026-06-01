@@ -4,32 +4,34 @@ from app.integrations.nasa_firms.schemas import (
     IngestResponse,
     OrbitalAlertListResponse,
 )
-from app.integrations.nasa_firms.service import ingest_viirs, list_alerts
+from app.integrations.orbital_alerts_service import get_aggregated_alerts, ingest_all_sources
 
 router = APIRouter(prefix="/api/v1/orbital-alerts", tags=["orbital-alerts"])
 
 
 @router.get("", response_model=OrbitalAlertListResponse)
 async def get_orbital_alerts() -> OrbitalAlertListResponse:
-    """List recent orbital heat-spot alerts.
+    """List recent orbital heat-spot alerts aggregated from all enabled sources.
 
-    Returns demo data with source_status='disabled_missing_api_key' when
-    NASA_FIRMS_MAP_KEY is not configured.  After the key is set and the
-    orbital_alerts migration is applied, this endpoint will return live data
-    from the database (updated every 3h by the ingest cron).
+    Sources (each opt-in via env var):
+    - NASA FIRMS VIIRS — requires NASA_FIRMS_MAP_KEY + NASA_FIRMS_ENABLED=true
+    - INPE TerraBrasilis WFS — requires INPE_QUEIMADAS_ENABLED=true (free/public)
+
+    Always returns a successful response; provider errors are captured in the
+    `errors` field.  Demo data is returned when no providers are enabled so
+    the frontend always has content to display.
     """
-    return list_alerts()
+    return await get_aggregated_alerts()
 
 
 @router.post("/ingest", response_model=IngestResponse)
 async def trigger_ingest() -> IngestResponse:
-    """Trigger a NASA FIRMS VIIRS data ingestion run.
+    """Trigger a data ingestion run for all enabled fire-spot providers.
 
-    Returns status='disabled_missing_api_key' when NASA_FIRMS_MAP_KEY is absent.
-    This is not an error — it is the expected state before the key is configured.
+    Fetches fresh data from NASA FIRMS and/or INPE TerraBrasilis depending on
+    which providers are enabled.  Returns a summary with per-provider status.
 
-    When the key is present, fetches CSV for the configured bbox and parses rows.
-    Persistence to the orbital_alerts table will be activated after the migration
-    is applied.
+    Returns status='disabled_missing_api_key' when no providers are enabled —
+    this is expected in the default configuration and is not an error.
     """
-    return await ingest_viirs()
+    return await ingest_all_sources()

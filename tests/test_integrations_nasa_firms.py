@@ -1,5 +1,7 @@
 """Tests for NASA FIRMS orbital alerts endpoint and service."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.integrations.nasa_firms.service import _csv_row_to_alert, _parse_confidence
@@ -88,10 +90,14 @@ async def test_orbital_alerts_list_returns_200(client):
 @pytest.mark.asyncio
 async def test_orbital_alerts_disabled_without_key(client):
     """Without NASA_FIRMS_MAP_KEY the endpoint must report disabled status."""
+    from app.integrations._cache import cache_clear
+
+    cache_clear()  # Ensure no cached result from a previous test
+
     response = await client.get("/api/v1/orbital-alerts")
     assert response.status_code == 200
     data = response.json()
-    # In test env the key is empty — must report disabled
+    # In test env no providers are enabled — must report disabled
     assert data["source_status"] == "disabled_missing_api_key"
     # Demo alerts are still returned so the frontend has something to display
     assert data["total"] > 0
@@ -99,9 +105,145 @@ async def test_orbital_alerts_disabled_without_key(client):
 
 @pytest.mark.asyncio
 async def test_ingest_disabled_without_key(client):
-    """POST /ingest must return disabled status clearly when key is absent."""
+    """POST /ingest must return disabled_missing_api_key when no providers are enabled."""
     response = await client.post("/api/v1/orbital-alerts/ingest")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "disabled_missing_api_key"
-    assert "NASA_FIRMS_MAP_KEY" in data["message"]
+    # Aggregator now covers both providers; message indicates configuration needed
+    assert "ENABLED" in data["message"] or "habilitada" in data["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — v2 schema fields (backwards-compat)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_orbital_alerts_response_has_v2_fields(client):
+    """Response must include new optional fields for multi-source metadata."""
+    response = await client.get("/api/v1/orbital-alerts")
+    assert response.status_code == 200
+    data = response.json()
+    # Backwards-compat fields must be present (default to empty/false)
+    assert "providers_attempted" in data
+    assert "providers_successful" in data
+    assert "fallback_used" in data
+    assert "errors" in data
+    assert isinstance(data["providers_attempted"], list)
+    assert isinstance(data["providers_successful"], list)
+    assert isinstance(data["errors"], list)
+    assert isinstance(data["fallback_used"], bool)
+
+
+@pytest.mark.asyncio
+async def test_ingest_response_has_v2_fields(client):
+    """IngestResponse must include new optional fields."""
+    response = await client.post("/api/v1/orbital-alerts/ingest")
+    assert response.status_code == 200
+    data = response.json()
+    assert "providers_successful" in data
+    assert "fallback_used" in data
+    assert "errors" in data
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — NASA FIRMS service with mocked provider
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ingest_viirs_with_mocked_provider():
+    """With mocked CSV rows, ingest_viirs must parse and cache alerts."""
+    from app.integrations._cache import cache_clear
+    from app.integrations.nasa_firms.service import ingest_viirs
+
+    cache_clear()
+
+    mock_rows = [
+        {
+            "latitude": "-4.200",
+            "longitude": "-38.500",
+            "confidence": "high",
+            "acq_date": "2026-05-31",
+            "acq_time": "1230",
+            "frp": "12.5",
+            "satellite": "N",
+        },
+        {
+            "latitude": "-4.500",
+            "longitude": "-39.100",
+            "confidence": "nominal",
+            "acq_date": "2026-05-31",
+            "acq_time": "1400",
+            "frp": "5.0",
+            "satellite": "N",
+        },
+    ]
+
+    with (
+        patch("app.integrations.nasa_firms.service.settings") as mock_settings,
+        patch(
+            "app.integrations.nasa_firms.service.firms_client.fetch_viirs_csv",
+            new_callable=AsyncMock,
+            return_value=mock_rows,
+        ),
+    ):
+        mock_settings.nasa_firms_map_key = "fake-key-for-test"
+        mock_settings.nasa_firms_enabled = True
+        mock_settings.fire_bbox = "-45.0,-12.0,-34.5,2.5"
+        mock_settings.fire_lookback_days = 1
+        mock_settings.external_api_cache_ttl_minutes = 60
+
+        result = await ingest_viirs()
+
+    assert result.status == "ok"
+    assert result.records_fetched == 2
+    assert result.records_inserted == 2
+    assert result.records_skipped == 0
+    assert "nasa_firms" in result.providers_successful
+    assert result.fallback_used is False
+
+
+@pytest.mark.asyncio
+async def test_ingest_viirs_external_error_returns_fallback():
+    """When the NASA FIRMS HTTP call fails, ingest_viirs must return error status."""
+    import httpx
+
+    from app.integrations._cache import cache_clear
+    from app.integrations.nasa_firms.service import ingest_viirs
+
+    cache_clear()
+
+    with (
+        patch("app.integrations.nasa_firms.service.settings") as mock_settings,
+        patch(
+            "app.integrations.nasa_firms.service.firms_client.fetch_viirs_csv",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectTimeout("timed out"),
+        ),
+    ):
+        mock_settings.nasa_firms_map_key = "fake-key-for-test"
+        mock_settings.nasa_firms_enabled = True
+        mock_settings.fire_bbox = "-45.0,-12.0,-34.5,2.5"
+        mock_settings.fire_lookback_days = 1
+        mock_settings.external_api_cache_ttl_minutes = 60
+
+        result = await ingest_viirs()
+
+    assert result.status == "error"
+    assert result.fallback_used is True
+    assert len(result.errors) > 0
+    # Key must NOT appear in errors
+    assert "fake-key-for-test" not in str(result.errors)
+
+
+@pytest.mark.asyncio
+async def test_list_alerts_fallback_when_disabled():
+    """list_alerts() must always return demo data when providers are disabled."""
+    from app.integrations.nasa_firms.service import list_alerts
+
+    result = list_alerts()
+    assert result.source_status == "disabled_missing_api_key"
+    assert result.total > 0
+    assert result.fallback_used is True

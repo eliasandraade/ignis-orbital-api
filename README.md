@@ -198,6 +198,35 @@ ruff format .
 
 ---
 
+## Integrações externas
+
+| Fonte | Endpoint | Chave | Status padrão |
+|---|---|---|---|
+| Open-Meteo | `GET /api/v1/environment/weather-risk` | Não requerida | ✅ Sempre ativo |
+| NASA FIRMS VIIRS | `GET /api/v1/orbital-alerts` | `NASA_FIRMS_MAP_KEY` | Desabilitado até habilitar |
+| INPE TerraBrasilis WFS | `GET /api/v1/orbital-alerts` | Não requerida | Desabilitado até habilitar |
+| OSM/Nominatim | `GET /api/v1/geocoding/reverse` | Não requerida | ✅ Sempre ativo |
+
+### Habilitando NASA FIRMS
+
+1. Cadastre-se em [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/)
+2. Configure no ambiente: `NASA_FIRMS_MAP_KEY=<sua-chave>` e `NASA_FIRMS_ENABLED=true`
+3. Nunca commite a chave — use variável de ambiente
+
+### Habilitando INPE Queimadas (TerraBrasilis)
+
+Apenas configure `INPE_QUEIMADAS_ENABLED=true` — sem chave necessária.
+
+Fonte: layer `ams1h:active-fire-today` do GeoServer público do INPE.
+
+### Comportamento de fallback
+
+Quando todas as fontes estão desabilitadas ou falham, o endpoint retorna dados
+demo (`source_status: "disabled_missing_api_key"`) com `fallback_used: true`.
+O frontend sempre recebe uma resposta válida — nunca um erro 5xx.
+
+---
+
 ## Variáveis de ambiente
 
 Ver [.env.example](.env.example) para a lista completa com descrições.
@@ -208,6 +237,19 @@ Variáveis obrigatórias para produção:
 |---|---|
 | `DATABASE_URL` | URL de conexão PostgreSQL async |
 | `JWT_SECRET_KEY` | Chave secreta JWT (mínimo 32 chars) |
+
+Variáveis opcionais para integrações externas:
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `NASA_FIRMS_ENABLED` | `false` | Habilitar NASA FIRMS (requer MAP_KEY) |
+| `NASA_FIRMS_MAP_KEY` | vazio | Chave de acesso NASA FIRMS |
+| `FIRE_BBOX` | `-45.0,-12.0,-34.5,2.5` | Bounding box CE/PI/MA/TO |
+| `FIRE_LOOKBACK_DAYS` | `1` | Dias de lookback para VIIRS |
+| `INPE_QUEIMADAS_ENABLED` | `false` | Habilitar INPE TerraBrasilis |
+| `INPE_QUEIMADAS_URL` | `https://terrabrasilis.dpi.inpe.br/geoserver/ows` | URL do GeoServer INPE |
+| `EXTERNAL_API_TIMEOUT_SECONDS` | `10` | Timeout HTTP para APIs externas |
+| `EXTERNAL_API_CACHE_TTL_MINUTES` | `60` | TTL do cache in-memory |
 
 ---
 
@@ -249,7 +291,9 @@ app/
 | 9 | ✅ | Aurora rule-based + ESG reports |
 | 10 | ✅ | Audit log API, admin stats, qualidade final |
 | Auditoria | ✅ | Sub-recursos de área, activate-protocol, war-room alias, privacidade |
-| Frontend | 🔜 | Integração progressiva substituindo src/data/ |
+| Integrações v1 | ✅ | Open-Meteo, NASA FIRMS (stub), OSM/Nominatim — produção Railway |
+| **Integrações v2** | 🔜 | NASA FIRMS real + cache, INPE TerraBrasilis WFS, agregação multi-fonte |
+| Frontend | ✅ | Integração progressiva completa — 21 rotas, API real Railway/Vercel |
 
 ---
 
