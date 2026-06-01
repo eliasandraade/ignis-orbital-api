@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 480
 
+    # External API base URLs
+    open_meteo_base_url: str = "https://api.open-meteo.com/v1"
+    nasa_firms_map_key: str = ""
+    nasa_firms_base_url: str = "https://firms.modaps.eosdis.nasa.gov/api"
+    osm_nominatim_base_url: str = "https://nominatim.openstreetmap.org"
+    external_api_timeout_seconds: int = 10
+    external_api_cache_ttl_minutes: int = 60
+
     cors_origins: list[str] = [
         "http://localhost:8080",
         "http://localhost:5173",

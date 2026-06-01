@@ -1,0 +1,21 @@
+from fastapi import APIRouter, Query
+
+from app.integrations.open_meteo.schemas import WeatherRiskResponse
+from app.integrations.open_meteo.service import get_weather_risk
+
+router = APIRouter(prefix="/api/v1/environment", tags=["environment"])
+
+
+@router.get("/weather-risk", response_model=WeatherRiskResponse)
+async def weather_risk(
+    lat: float = Query(..., ge=-90, le=90, description="Latitude"),
+    lng: float = Query(..., ge=-180, le=180, description="Longitude"),
+) -> WeatherRiskResponse:
+    """Return current weather-based fire risk for a coordinate pair.
+
+    Data sourced from Open-Meteo (open-meteo.com) — no API key required.
+    Results are cached per location to avoid excessive external calls.
+    Marked as 'cached' when served from cache, 'live' when freshly fetched,
+    'unavailable' when Open-Meteo is unreachable.
+    """
+    return await get_weather_risk(lat, lng)
