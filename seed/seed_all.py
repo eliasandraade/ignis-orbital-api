@@ -1,23 +1,26 @@
 import asyncio
-import os
 
-from app.config import get_settings
+from app.config import DEMO_SEED_ENVS, get_settings
 from app.database import AsyncSessionLocal
 
 
 class DemoSeedRefusedError(RuntimeError):
-    """Raised when the demo seed would run in production without explicit opt-in."""
+    """Raised when the demo seed would run outside a demo/development environment."""
 
 
 def ensure_seed_allowed() -> None:
     """The demo seed creates users with published passwords (see seed_users.py).
 
-    Refuse to run it with APP_ENV=production unless SEED_DEMO_DATA=true.
+    It only runs with APP_ENV in development/test/demo. There is deliberately no
+    override for staging or production: demonstrations use a separate
+    APP_ENV=demo deployment with its own database.
     """
-    if get_settings().is_production and os.environ.get("SEED_DEMO_DATA", "false") != "true":
+    settings = get_settings()
+    if not settings.demo_seed_allowed:
+        allowed = ", ".join(sorted(DEMO_SEED_ENVS))
         raise DemoSeedRefusedError(
-            "Seed demonstrativo recusado em APP_ENV=production. "
-            "Defina SEED_DEMO_DATA=true apenas em ambiente de demonstração."
+            f"Seed demonstrativo recusado em APP_ENV={settings.app_env}. "
+            f"Permitido apenas em: {allowed}."
         )
 
 

@@ -1,6 +1,7 @@
 """Sprint 0 security controls: production secrets, demo seed, readiness,
 public report validation and rate limiting."""
 
+import pathlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,6 +16,9 @@ from app.reports.schemas import ReportCreate
 from seed.seed_all import DemoSeedRefusedError, ensure_seed_allowed
 
 STRONG_SECRET = "x" * 48
+PROD_DB = "postgresql+asyncpg://app:not-a-real-password@db.internal:5432/ignis"
+# Minimal valid configuration for an operational environment.
+OPERATIONAL = {"jwt_secret_key": STRONG_SECRET, "database_url": PROD_DB}
 
 # --- JWT secret guard ---------------------------------------------------------------
 
@@ -29,11 +33,11 @@ STRONG_SECRET = "x" * 48
 )
 def test_production_rejects_insecure_jwt_secret(secret):
     with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
-        Settings(app_env="production", jwt_secret_key=secret, _env_file=None)
+        Settings(app_env="production", jwt_secret_key=secret, database_url=PROD_DB, _env_file=None)
 
 
 def test_production_accepts_strong_jwt_secret():
-    settings = Settings(app_env="production", jwt_secret_key=STRONG_SECRET, _env_file=None)
+    settings = Settings(app_env="production", **OPERATIONAL, _env_file=None)
     assert settings.is_production
 
 
@@ -68,28 +72,95 @@ def test_demo_modes_are_off_by_default():
 def _patch_env(monkeypatch, app_env: str):
     from seed import seed_all
 
-    fake = MagicMock()
-    fake.is_production = app_env == "production"
-    monkeypatch.setattr(seed_all, "get_settings", lambda: fake)
+    settings = Settings(app_env=app_env, **OPERATIONAL, _env_file=None)
+    monkeypatch.setattr(seed_all, "get_settings", lambda: settings)
 
 
-def test_demo_seed_refused_in_production(monkeypatch):
-    _patch_env(monkeypatch, "production")
-    monkeypatch.delenv("SEED_DEMO_DATA", raising=False)
+@pytest.mark.parametrize("app_env", ["production", "staging"])
+def test_demo_seed_refused_in_operational_envs(monkeypatch, app_env):
+    _patch_env(monkeypatch, app_env)
     with pytest.raises(DemoSeedRefusedError):
         ensure_seed_allowed()
 
 
-def test_demo_seed_allowed_in_production_only_with_explicit_opt_in(monkeypatch):
-    _patch_env(monkeypatch, "production")
+@pytest.mark.parametrize("app_env", ["production", "staging"])
+def test_demo_seed_has_no_override_in_operational_envs(monkeypatch, app_env):
+    """Codex P1 follow-up: the old SEED_DEMO_DATA=true override was removed."""
     monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    _patch_env(monkeypatch, app_env)
+    with pytest.raises(DemoSeedRefusedError):
+        ensure_seed_allowed()
+
+
+@pytest.mark.parametrize("app_env", ["development", "test", "demo"])
+def test_demo_seed_allowed_in_demo_envs(monkeypatch, app_env):
+    _patch_env(monkeypatch, app_env)
     ensure_seed_allowed()
 
 
-def test_demo_seed_allowed_outside_production(monkeypatch):
-    _patch_env(monkeypatch, "development")
-    monkeypatch.delenv("SEED_DEMO_DATA", raising=False)
-    ensure_seed_allowed()
+# --- real dotenv files (Codex P1 on PR #3) ---------------------------------------------
+
+
+def _load_dotenv(tmp_path, monkeypatch, content: str) -> Settings:
+    env_file = tmp_path / ".env"
+    env_file.write_text(content, encoding="utf-8")
+    # Make sure nothing comes from the process environment.
+    for key in ("APP_ENV", "SEED_DEMO_DATA", "JWT_SECRET_KEY", "DATABASE_URL", "CORS_ORIGINS"):
+        monkeypatch.delenv(key, raising=False)
+    return Settings(_env_file=str(env_file))
+
+
+@pytest.mark.parametrize("seed_value", ["false", "true"])
+def test_dotenv_with_seed_demo_data_loads(tmp_path, monkeypatch, seed_value):
+    """A legacy SEED_DEMO_DATA line in .env must not abort startup (was extra_forbidden)
+    and must never enable the seed in an operational environment."""
+    settings = _load_dotenv(
+        tmp_path,
+        monkeypatch,
+        f"APP_ENV=production\nJWT_SECRET_KEY={STRONG_SECRET}\nDATABASE_URL={PROD_DB}\n"
+        f"SEED_DEMO_DATA={seed_value}\n",
+    )
+    assert settings.app_env == "production"
+    assert settings.demo_seed_allowed is False
+
+
+def test_env_example_file_loads_as_dotenv(tmp_path, monkeypatch):
+    """`cp .env.example .env` is the documented setup; it must load (POSTGRES_* included)."""
+    example = (pathlib.Path(__file__).parent.parent / ".env.example").read_text(encoding="utf-8")
+    settings = _load_dotenv(tmp_path, monkeypatch, example)
+    assert settings.app_env == "development"
+    assert settings.demo_seed_allowed is True
+    assert "http://localhost:5173" in settings.cors_origins
+
+
+@pytest.mark.parametrize("bad_env", ["prod", "Production ", "live", ""])
+def test_invalid_app_env_fails_closed(tmp_path, monkeypatch, bad_env):
+    with pytest.raises(ValidationError):
+        _load_dotenv(tmp_path, monkeypatch, f"APP_ENV={bad_env}\n")
+
+
+def test_operational_env_rejects_missing_or_published_database_url(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        _load_dotenv(tmp_path, monkeypatch, f"APP_ENV=production\nJWT_SECRET_KEY={STRONG_SECRET}\n")
+
+
+def test_staging_also_requires_strong_secret(tmp_path, monkeypatch):
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        _load_dotenv(tmp_path, monkeypatch, "APP_ENV=staging\n")
+
+
+@pytest.mark.parametrize("alg", ["none", "RS256", "hs256x"])
+def test_jwt_algorithm_restricted_to_hmac(alg):
+    with pytest.raises(ValidationError):
+        Settings(jwt_algorithm=alg, _env_file=None)
+
+
+def test_entrypoint_requires_explicit_app_env_and_skips_seed_safely():
+    script = (pathlib.Path(__file__).parent.parent / "scripts" / "entrypoint.sh").read_text()
+    assert ': "${APP_ENV:?' in script
+    assert "python -m seed --if-allowed" in script
+    assert "SEED_DEMO_DATA" not in script
 
 
 # --- readiness does not leak driver errors -------------------------------------------

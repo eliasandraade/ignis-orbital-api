@@ -1,11 +1,12 @@
 import json
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-change-in-production"
+DEV_DATABASE_URL = "postgresql+asyncpg://ignis:ignis_secret@db:5432/ignis_db"
 MIN_PRODUCTION_SECRET_LENGTH = 32
 # Defaults published in this repo (config, .env.example, docker-compose).
 _KNOWN_INSECURE_SECRETS = {
@@ -14,23 +15,37 @@ _KNOWN_INSECURE_SECRETS = {
 }
 
 
+AppEnv = Literal["development", "test", "demo", "staging", "production"]
+
+# Operational environments: no demo data, no published credentials, strong secrets.
+OPERATIONAL_ENVS: frozenset[str] = frozenset({"staging", "production"})
+# The demo seed (users with published passwords) may only run here.
+DEMO_SEED_ENVS: frozenset[str] = frozenset({"development", "test", "demo"})
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # .env is shared with docker compose (POSTGRES_*), so unrelated keys
+        # must not abort startup. Unknown keys are ignored, never applied.
+        extra="ignore",
     )
 
     app_name: str = "IGNIS Orbital API"
     app_version: str = "0.1.0"
-    app_env: str = "development"
+    # Closed set: a typo such as APP_ENV=prod must fail, not silently become a
+    # non-operational environment where demo data is allowed.
+    app_env: AppEnv = "development"
     debug: bool = False
 
-    database_url: str = "postgresql+asyncpg://ignis:ignis_secret@db:5432/ignis_db"
+    database_url: str = DEV_DATABASE_URL
 
     jwt_secret_key: str = DEV_JWT_SECRET
-    jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 480
+    # HMAC family only: an env value such as "none" must never be accepted.
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_access_token_expire_minutes: int = Field(default=480, ge=5, le=1440)
 
     # Fictitious orbital alerts are served only when explicitly enabled.
     orbital_alerts_demo_mode: bool = False
@@ -78,15 +93,29 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app_env == "production"
 
+    @property
+    def is_operational(self) -> bool:
+        return self.app_env in OPERATIONAL_ENVS
+
+    @property
+    def demo_seed_allowed(self) -> bool:
+        """Demo data never runs in staging/production; there is no override."""
+        return self.app_env in DEMO_SEED_ENVS
+
     @model_validator(mode="after")
-    def reject_insecure_production_secret(self) -> "Settings":
-        if self.is_production and (
+    def reject_insecure_operational_secret(self) -> "Settings":
+        if self.is_operational and (
             self.jwt_secret_key in _KNOWN_INSECURE_SECRETS
             or len(self.jwt_secret_key) < MIN_PRODUCTION_SECRET_LENGTH
         ):
             raise ValueError(
-                "JWT_SECRET_KEY inseguro para APP_ENV=production: use um valor aleatório "
+                f"JWT_SECRET_KEY inseguro para APP_ENV={self.app_env}: use um valor aleatório "
                 f"com pelo menos {MIN_PRODUCTION_SECRET_LENGTH} caracteres."
+            )
+        if self.is_operational and "ignis_secret" in self.database_url:
+            raise ValueError(
+                f"DATABASE_URL ausente ou com a senha de desenvolvimento publicada "
+                f"(APP_ENV={self.app_env})."
             )
         return self
 
