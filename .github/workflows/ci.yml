@@ -16,41 +16,58 @@ env:
   PYTHON_VERSION: "3.12"
   # Tests and migrations never use production settings or secrets.
   APP_ENV: test
+  # Every install comes from the hash-locked export of uv.lock, wheels only.
+  PIP_INSTALL: pip install --require-hashes --only-binary :all: -r requirements-dev.lock
 
 jobs:
+  lock:
+    name: Lockfile em sincronia
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@e92bafb6253dcd438e0484186d7669ea7a8ca1cc # v6.4.3
+      - name: uv.lock corresponde ao pyproject.toml
+        run: uv lock --check
+      - name: Exportações com hash atualizadas
+        run: |
+          uv export -q --frozen --no-dev --no-emit-project --format requirements-txt -o /tmp/req.lock
+          uv export -q --frozen --extra dev --no-emit-project --format requirements-txt -o /tmp/req-dev.lock
+          diff <(grep -v '^#' requirements.lock) <(grep -v '^#' /tmp/req.lock)
+          diff <(grep -v '^#' requirements-dev.lock) <(grep -v '^#' /tmp/req-dev.lock)
+
   lint:
     name: Ruff
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: pip install "ruff>=0.8.0"
+          cache-dependency-path: requirements-dev.lock
+      - run: ${{ env.PIP_INSTALL }}
       - run: ruff check .
 
   test:
     name: Pytest + cobertura
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: pip install -e ".[dev]"
+          cache-dependency-path: requirements-dev.lock
+      - run: ${{ env.PIP_INSTALL }}
       - name: pytest
         # A failing test or coverage below the floor fails this check.
         run: >
-          pytest -q
+          python -m pytest -q
           --cov=app --cov-report=term-missing:skip-covered
           --cov-report=xml:coverage.xml
           --cov-fail-under=75
           --junitxml=pytest-report.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: backend-coverage
@@ -76,13 +93,13 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://ignis:ci-only-password@localhost:5432/ignis_ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: pip install -e ".[dev]"
+          cache-dependency-path: requirements-dev.lock
+      - run: ${{ env.PIP_INSTALL }}
       - name: upgrade → downgrade → upgrade
         run: |
           alembic upgrade head
@@ -113,7 +130,7 @@ jobs:
           python -m seed.demo_users check   # now clean: exit 0
       - name: Healthcheck da API contra o banco migrado
         run: |
-          uvicorn app.main:app --port 8000 &
+          python -m uvicorn app.main:app --port 8000 &
           for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
           curl -sf localhost:8000/health
           curl -sf localhost:8000/ready | grep -q '"connected"'
@@ -123,23 +140,29 @@ jobs:
     name: pip-audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: pip install -e ".[dev]" pip-audit
-      - name: pip-audit (falha com vulnerabilidade conhecida)
-        run: pip-audit --skip-editable --progress-spinner off
+          cache-dependency-path: requirements-dev.lock
+      - run: ${{ env.PIP_INSTALL }}
+      - name: pip-audit das dependências de produção (falha com vulnerabilidade conhecida)
+        run: pip-audit -r requirements.lock --require-hashes --disable-pip --progress-spinner off
+      - name: pip-audit das dependências de desenvolvimento
+        run: pip-audit -r requirements-dev.lock --require-hashes --disable-pip --progress-spinner off
 
   docker:
     name: Docker build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Build (sem push)
         run: docker build -t ignis-orbital-api:ci .
+      - name: Imagem importa a aplicação e roda como não-root
+        run: |
+          docker run --rm --entrypoint python ignis-orbital-api:ci -c "import app.main"
+          test "$(docker run --rm --entrypoint id ignis-orbital-api:ci -u)" != "0"
       - name: Container recusa iniciar sem APP_ENV
         run: |
           if docker run --rm --entrypoint /app/scripts/entrypoint.sh ignis-orbital-api:ci; then
@@ -155,12 +178,12 @@ jobs:
     if: vars.SONAR_CI_ANALYSIS == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: backend-coverage
-      - uses: SonarSource/sonarqube-scan-action@v5
+      - uses: SonarSource/sonarqube-scan-action@1a6d90ebcb0e6a6b1d87e37ba693fe453195ae25 # v5.3.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
