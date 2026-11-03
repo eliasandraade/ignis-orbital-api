@@ -17,7 +17,7 @@ env:
   # Tests and migrations never use production settings or secrets.
   APP_ENV: test
   # Every install comes from the hash-locked export of uv.lock, wheels only.
-  PIP_INSTALL: pip install --require-hashes --only-binary :all: -r requirements-dev.lock
+  PIP_INSTALL: "pip install --require-hashes --only-binary :all: -r requirements-dev.lock"
 
 jobs:
   lock:
@@ -131,7 +131,7 @@ jobs:
       - name: Healthcheck da API contra o banco migrado
         run: |
           python -m uvicorn app.main:app --port 8000 &
-          for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
           curl -sf localhost:8000/health
           curl -sf localhost:8000/ready | grep -q '"connected"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/api/v1/orbital-alerts/ingest)" = "401"
