@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  # Tests and migrations never use production settings or secrets.
+  APP_ENV: test
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install "ruff>=0.8.0"
+      - run: ruff check .
+
+  test:
+    name: Pytest + cobertura
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - name: pytest
+        # A failing test or coverage below the floor fails this check.
+        run: >
+          pytest -q
+          --cov=app --cov-report=term-missing:skip-covered
+          --cov-report=xml:coverage.xml
+          --cov-fail-under=75
+          --junitxml=pytest-report.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: |
+            coverage.xml
+            pytest-report.xml
+          retention-days: 14
+
+  migrations:
+    name: Migrations (PostGIS isolado)
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: ignis
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: ignis_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ignis -d ignis_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+asyncpg://ignis:ci-only-password@localhost:5432/ignis_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - name: upgrade → downgrade → upgrade
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          alembic current
+      - name: Seed idempotente (APP_ENV=test)
+        run: |
+          python -m seed
+          python -m seed
+      - name: Seed é recusado em ambientes operacionais
+        env:
+          JWT_SECRET_KEY: ci-strong-secret-0123456789abcdef0123456789abcdef
+        run: |
+          for env in production staging; do
+            if APP_ENV=$env python -m seed; then
+              echo "::error::seed executou com APP_ENV=$env"; exit 1
+            fi
+            APP_ENV=$env python -m seed --if-allowed | grep -q "ignorado"
+          done
+      - name: Healthcheck da API contra o banco migrado
+        run: |
+          uvicorn app.main:app --port 8000 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
+          curl -sf localhost:8000/health
+          curl -sf localhost:8000/ready | grep -q '"connected"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/api/v1/orbital-alerts/ingest)" = "401"
+
+  dependencies:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]" pip-audit
+      - name: pip-audit (falha com vulnerabilidade conhecida)
+        run: pip-audit --skip-editable --progress-spinner off
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (sem push)
+        run: docker build -t ignis-orbital-api:ci .
+      - name: Container recusa iniciar sem APP_ENV
+        run: |
+          if docker run --rm --entrypoint /app/scripts/entrypoint.sh ignis-orbital-api:ci; then
+            echo "::error::entrypoint iniciou sem APP_ENV"; exit 1
+          fi
+
+  sonarcloud:
+    name: SonarQube Cloud (cobertura)
+    needs: test
+    # Opt-in: requires the SONAR_TOKEN secret AND the repository variable
+    # SONAR_CI_ANALYSIS=true, set only after disabling Automatic Analysis in
+    # SonarQube Cloud (both modes cannot run on the same project).
+    if: vars.SONAR_CI_ANALYSIS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+      - uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
