@@ -2,6 +2,7 @@
 public report validation and rate limiting."""
 
 import pathlib
+import secrets
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,7 +16,8 @@ from app.main import app
 from app.reports.schemas import ReportCreate
 from seed.seed_all import DemoSeedRefusedError, ensure_seed_allowed
 
-STRONG_SECRET = "x" * 48
+# Generated per run: a random secret, never a literal in the repository.
+STRONG_SECRET = secrets.token_hex(32)
 PROD_DB = "postgresql+asyncpg://app:not-a-real-password@db.internal:5432/ignis"
 # Minimal valid configuration for an operational environment.
 OPERATIONAL = {"jwt_secret_key": STRONG_SECRET, "database_url": PROD_DB}
@@ -285,3 +287,36 @@ def test_rate_limit_window_resets():
     assert rl._hit("k", limit=1, window_seconds=60, now=0.0) is None
     assert rl._hit("k", limit=1, window_seconds=60, now=1.0) is not None
     assert rl._hit("k", limit=1, window_seconds=60, now=61.0) is None
+
+
+# --- independent review follow-up (Sprint 0.1) -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "x" * 48,  # repetitive
+        " " * 40,  # whitespace
+        " " + secrets.token_hex(32),  # padded
+        "dev-secret-change-in-production!",  # published value with a suffix
+    ],
+)
+def test_operational_rejects_trivial_or_derived_jwt_secrets(secret):
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        Settings(app_env="production", jwt_secret_key=secret, database_url=PROD_DB, _env_file=None)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "",
+        "postgresql+asyncpg://ignis@localhost/ignis_db",  # dev variant without port
+        "postgresql+asyncpg://app@db.internal:5432/ignis",  # no password
+        "postgresql+asyncpg://ignis:ignis_secret@db.internal:5432/ignis",  # published
+    ],
+)
+def test_operational_rejects_unsafe_database_urls(url):
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        Settings(
+            app_env="production", jwt_secret_key=STRONG_SECRET, database_url=url, _env_file=None
+        )

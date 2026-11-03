@@ -20,6 +20,33 @@ _KNOWN_INSECURE_SECRETS = {
 }
 
 
+def _weak_secret(secret: str) -> bool:
+    """Length alone is not enough: reject padded/repetitive or published values."""
+    return (
+        len(secret) < MIN_PRODUCTION_SECRET_LENGTH
+        or secret != secret.strip()
+        or len(set(secret)) < 10
+        or any(known in secret for known in _KNOWN_INSECURE_SECRETS)
+    )
+
+
+def _unsafe_database_url(url: str) -> bool:
+    """Operational DB URLs must be explicit and carry a non-published password."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(url)
+        password = parts.password
+    except ValueError:
+        return True
+    return (
+        url == DEV_DATABASE_URL
+        or not parts.hostname
+        or not password
+        or password == "ignis_secret"  # published in docker-compose/.env.example
+    )
+
+
 AppEnv = Literal["development", "test", "demo", "staging", "production"]
 
 # Operational environments: no demo data, no published credentials, strong secrets.
@@ -109,17 +136,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def reject_insecure_operational_secret(self) -> "Settings":
-        if self.is_operational and (
-            self.jwt_secret_key in _KNOWN_INSECURE_SECRETS
-            or len(self.jwt_secret_key) < MIN_PRODUCTION_SECRET_LENGTH
-        ):
+        if self.is_operational and _weak_secret(self.jwt_secret_key):
             raise ValueError(
                 f"JWT_SECRET_KEY inseguro para APP_ENV={self.app_env}: use um valor aleatório "
                 f"com pelo menos {MIN_PRODUCTION_SECRET_LENGTH} caracteres."
             )
-        if self.is_operational and (
-            self.database_url == DEV_DATABASE_URL or "ignis_secret" in self.database_url
-        ):
+        if self.is_operational and _unsafe_database_url(self.database_url):
             raise ValueError(
                 f"DATABASE_URL ausente ou com a credencial de desenvolvimento publicada "
                 f"(APP_ENV={self.app_env})."

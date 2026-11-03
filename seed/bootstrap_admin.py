@@ -32,7 +32,9 @@ def read_password(stream=sys.stdin) -> str:
         if first != getpass.getpass("Confirme a senha: "):
             raise SystemExit("As senhas não conferem.")
         return first
-    return stream.readline().rstrip("\n")
+    # Strip only the line terminator (\n or \r\n from Windows pipes); a stray
+    # "\r" would create an admin whose password nobody can type.
+    return stream.readline().rstrip("\r\n")
 
 
 async def legitimate_admins(db: AsyncSession) -> int:
@@ -43,7 +45,9 @@ async def legitimate_admins(db: AsyncSession) -> int:
     total = await db.scalar(
         select(func.count()).select_from(User).where(User.role == "admin", User.is_active)
     )
-    risky_admins = sum(1 for f in await scan(db) if f.risky and f.role == "admin")
+    risky_admins = sum(
+        1 for f in await scan(db) if f.risky and f.is_active and f.role == "admin"
+    )
     return int(total or 0) - risky_admins
 
 

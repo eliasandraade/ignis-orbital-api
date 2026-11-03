@@ -29,8 +29,10 @@ alembic upgrade head
 python -m seed --if-allowed
 
 echo "==> [IGNIS Orbital API] Iniciando servidor..."
-if [[ "$APP_ENV" == "production" || "$APP_ENV" == "staging" ]]; then
-    exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 --proxy-headers
-else
+# --reload only for local development: a reachable deploy (demo/staging/production)
+# must never re-execute code written at runtime.
+if [[ "$APP_ENV" == "development" ]]; then
     exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --reload
+else
+    exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 --proxy-headers
 fi

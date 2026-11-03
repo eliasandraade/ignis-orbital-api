@@ -23,11 +23,18 @@ PUBLISHED_PASSWORDS = frozenset(
 )
 
 
+MIN_DISTINCT_CHARS = 5
+
+
 def validate_new_password(value: str) -> str:
-    if len(value) < MIN_PASSWORD_LENGTH:
+    if len(value.strip()) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"A senha deve ter pelo menos {MIN_PASSWORD_LENGTH} caracteres.")
     if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
         raise ValueError(f"A senha deve ter no máximo {MAX_PASSWORD_BYTES} bytes.")
-    if value.lower() in PUBLISHED_PASSWORDS:
+    if len(set(value)) < MIN_DISTINCT_CHARS:
+        raise ValueError("Senha com pouca variedade de caracteres.")
+    lowered = value.lower()
+    # Substring, not only equality: "Admin@123Admin" must also be rejected.
+    if any(published in lowered for published in PUBLISHED_PASSWORDS):
         raise ValueError("Senha publicada/demonstrativa não é permitida.")
     return value

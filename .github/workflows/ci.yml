@@ -124,7 +124,7 @@ jobs:
         run: |
           set +e
           python -m seed.demo_users check; rc=$?
-          test "$rc" = "2" || exit 1   # seed accounts detected as risky
+          test "$rc" = "4" || exit 1   # seed accounts detected as risky
           python -m seed.demo_users deactivate --confirm-host localhost; rc=$?
           test "$rc" = "3" || exit 1   # refused: would leave no legitimate admin
           set -e
@@ -162,10 +162,13 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Build (sem push)
         run: docker build -t ignis-orbital-api:ci .
-      - name: Imagem importa a aplicação e roda como não-root
+      - name: Imagem importa a aplicação, roda como não-root e sem escrita no código
         run: |
           docker run --rm --entrypoint python ignis-orbital-api:ci -c "import app.main"
           test "$(docker run --rm --entrypoint id ignis-orbital-api:ci -u)" != "0"
+          if docker run --rm --entrypoint sh ignis-orbital-api:ci -c "touch /app/app/x.py"; then
+            echo "::error::código da aplicação gravável pelo usuário de runtime"; exit 1
+          fi
       - name: Container recusa iniciar sem APP_ENV
         run: |
           if docker run --rm --entrypoint /app/scripts/entrypoint.sh ignis-orbital-api:ci; then

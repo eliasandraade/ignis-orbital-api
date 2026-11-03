@@ -84,7 +84,7 @@ Em banco **reaproveitado ou restaurado** de uma versão antiga (que rodava o see
 
 1. Verificação, somente leitura:
    ```bash
-   python -m seed.demo_users check     # exit 2 = contas ativas com e-mail demo ou senha publicada
+   python -m seed.demo_users check     # exit 4 = contas com senha publicada ou contas demo ativas
    ```
    Executar dentro do serviço (`railway ssh` ou um comando one-off no próprio serviço), porque o banco fica em rede privada.
 2. **Antes de desativar, garantir um administrador real ativo.** Se o banco só tem o admin do seed, criar o admin real com `python -m seed.bootstrap_admin` (§4, passo 6). Sem isso, o `deactivate` **recusa a operação** (exit 3), para não trancar o sistema: a API de usuários exige um admin ativo e tokens de contas desativadas deixam de valer na hora.

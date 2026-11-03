@@ -11,7 +11,9 @@ Deactivation (requires explicit confirmation of the database host):
 Deactivation sets is_active=false, replaces the password hash with a random,
 unknown value (reactivation requires a password reset by an admin) and writes
 an audit log entry per account. It never deletes rows and never prints password
-hashes or secrets. Exit code of `check`: 0 = clean, 2 = risky accounts found.
+hashes or secrets. Exit code of `check`: 0 = clean, 4 = risky accounts found
+(2 is reserved for argparse usage errors). Exit code of `deactivate`: 3 = refused
+because no legitimate admin would remain (create one with seed.bootstrap_admin).
 
 Running this against production requires the owner's authorization
 (see docs/IGNIS/RAILWAY-RECOVERY.md).
@@ -30,6 +32,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.passwords import PUBLISHED_PASSWORDS
 from app.core.security import hash_password, verify_password
 from seed.seed_users import USERS
+
+EXIT_RISKY = 4
+EXIT_LAST_ADMIN = 3
 
 DEMO_EMAILS = frozenset(u["email"].lower() for u in USERS)
 _KNOWN_PASSWORDS = frozenset({u["password"] for u in USERS} | PUBLISHED_PASSWORDS)
@@ -50,11 +55,22 @@ class Finding:
 
     @property
     def risky(self) -> bool:
-        return self.is_active and (self.demo_email or self.published_password)
+        # A published password is risky even on an inactive account: an admin can
+        # reactivate it (PATCH is_active=true) and the credential works again.
+        return self.published_password or (self.is_active and self.demo_email)
+
+
+def _matches(password: str, password_hash: str) -> bool:
+    try:
+        return verify_password(password, password_hash)
+    except (ValueError, TypeError):
+        # Malformed/unknown hash: cannot match a published password; a single
+        # bad row must not abort the whole scan.
+        return False
 
 
 def classify(user_id: str, email: str, role: str, is_active: bool, password_hash: str) -> Finding:
-    published = any(verify_password(p, password_hash) for p in _KNOWN_PASSWORDS)
+    published = any(_matches(p, password_hash) for p in _KNOWN_PASSWORDS)
     return Finding(
         user_id=user_id,
         email=email,
@@ -75,7 +91,7 @@ async def scan(db: AsyncSession) -> list[Finding]:
 
 def ensure_admin_remains(findings: list[Finding], active_admins: int) -> None:
     """Refuse when every active administrator is about to be revoked."""
-    revoked_admins = sum(1 for f in findings if f.risky and f.role == "admin")
+    revoked_admins = sum(1 for f in findings if f.risky and f.is_active and f.role == "admin")
     if revoked_admins and active_admins - revoked_admins < 1:
         raise WouldRemoveLastAdminError(
             "Recusado: a desativação deixaria o sistema sem administrador ativo. "
@@ -150,7 +166,7 @@ async def _main(argv: list[str]) -> int:
         findings = await scan(db)
         _print(findings)
         if args.cmd == "check":
-            return 2 if any(f.risky for f in findings) else 0
+            return EXIT_RISKY if any(f.risky for f in findings) else 0
         if args.confirm_host != host:
             print(f"Recusado: --confirm-host={args.confirm_host!r} difere do host alvo {host!r}.")
             return 1
@@ -158,7 +174,7 @@ async def _main(argv: list[str]) -> int:
             n = await deactivate(db, findings)
         except WouldRemoveLastAdminError as exc:
             print(exc)
-            return 3
+            return EXIT_LAST_ADMIN
         print(f"{n} conta(s) desativada(s) e com senha invalidada.")
         return 0
 

@@ -104,3 +104,12 @@ def test_expired_token_is_rejected():
     )
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_token(token)
+
+
+@pytest.mark.parametrize(
+    "password",
+    [" " * 12, "a" * 12, DEMO_PW["admin"].capitalize() + "Admin", "x" + DEMO_PW["gestor"] + "123"],
+)
+def test_password_policy_rejects_blank_low_variety_and_embedded_published(password):
+    with pytest.raises(ValidationError):
+        UserCreate(**{**VALID, "password": password})

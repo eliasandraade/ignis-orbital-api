@@ -14,9 +14,10 @@ RUN pip install --no-cache-dir --require-hashes --only-binary :all: -r requireme
 # it is not installed as a package.
 COPY . .
 
+# Code stays owned by root (read-only for the runtime user).
+ENV PYTHONDONTWRITEBYTECODE=1
 RUN chmod +x /app/scripts/entrypoint.sh \
-    && useradd --create-home --uid 10001 ignis \
-    && chown -R ignis:ignis /app
+    && useradd --create-home --uid 10001 ignis
 
 # Run as an unprivileged user (Sonar hotspot docker:S6471).
 USER ignis
