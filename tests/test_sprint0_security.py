@@ -168,7 +168,8 @@ def test_entrypoint_requires_explicit_app_env_and_skips_seed_safely():
     assert ': "${APP_ENV:?' in script
     assert "python -m seed --if-allowed" in script
     # Railway pre-deploy runs only the migrate role; the API role can skip migrations.
-    assert "migrate)" in script and 'MIGRATE_ON_START:-true' in script
+    assert "migrate)" in script
+    assert "MIGRATE_ON_START:-true" in script
     assert "SEED_DEMO_DATA" not in script
 
 
