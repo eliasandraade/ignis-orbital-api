@@ -47,7 +47,8 @@ def _hit(key: str, limit: int, window_seconds: int, now: float) -> int | None:
 
 
 def _evict_expired(now: float, window_seconds: int) -> None:
-    for k, (start, _count) in list(_windows.items()):
+    # list() is required: entries are deleted while iterating.
+    for k, (start, _count) in list(_windows.items()):  # NOSONAR python:S7504
         if now - start >= window_seconds:
             del _windows[k]
     if len(_windows) >= _MAX_TRACKED_KEYS:
@@ -57,7 +58,10 @@ def _evict_expired(now: float, window_seconds: int) -> None:
 def rate_limit(scope: str, limit: int, window_seconds: int = 60) -> Callable:
     """FastAPI dependency: allow `limit` requests per client IP per window."""
 
-    async def _check(request: Request) -> None:
+    # Deliberately async without await: FastAPI runs sync dependencies in a
+    # thread pool, which would make the shared counter dict racy. As a
+    # coroutine it always runs on the single event-loop thread.
+    async def _check(request: Request) -> None:  # NOSONAR python:S7503
         if not get_settings().rate_limit_enabled:
             return
         retry_after = _hit(f"{scope}:{client_ip(request)}", limit, window_seconds, time.monotonic())

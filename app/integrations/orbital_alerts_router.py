@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/v1/orbital-alerts", tags=["orbital-alerts"])
 
 @router.get(
     "",
-    response_model=OrbitalAlertListResponse,
     dependencies=[Depends(rate_limit("orbital-alerts", limit=60, window_seconds=60))],
 )
 async def get_orbital_alerts() -> OrbitalAlertListResponse:
@@ -34,7 +33,7 @@ async def get_orbital_alerts() -> OrbitalAlertListResponse:
     return await list_alerts()
 
 
-@router.post("/ingest", response_model=IngestResponse)
+@router.post("/ingest")
 async def trigger_ingest(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_role(UserRole.ADMIN)),

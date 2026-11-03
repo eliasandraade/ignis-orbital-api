@@ -9,7 +9,7 @@ from app.dependencies import require_role
 router = APIRouter(prefix="/api/v1/aurora", tags=["aurora"])
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
+@router.post("/analyze")
 async def analyze_incident(
     body: AnalyzeRequest,
     _current_user=Depends(require_role(UserRole.CAMPO)),
@@ -20,7 +20,6 @@ async def analyze_incident(
 
 @router.post(
     "/chat",
-    response_model=ChatResponse,
     dependencies=[Depends(rate_limit("aurora-chat", limit=30))],
 )
 async def chat_with_aurora(body: ChatRequest) -> ChatResponse:

@@ -9,7 +9,6 @@ router = APIRouter(prefix="/api/v1/environment", tags=["environment"])
 
 @router.get(
     "/weather-risk",
-    response_model=WeatherRiskResponse,
     dependencies=[Depends(rate_limit("weather-risk", limit=60))],
 )
 async def weather_risk(

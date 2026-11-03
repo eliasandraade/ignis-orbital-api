@@ -9,7 +9,6 @@ router = APIRouter(prefix="/api/v1/geocoding", tags=["geocoding"])
 
 @router.get(
     "/reverse",
-    response_model=ReverseGeocodingResponse,
     dependencies=[Depends(rate_limit("geocoding", limit=30))],
 )
 async def reverse_geocoding(
