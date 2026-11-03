@@ -128,7 +128,9 @@ jobs:
           python -m seed.demo_users deactivate --confirm-host localhost; rc=$?
           test "$rc" = "3" || exit 1   # refused: would leave no legitimate admin
           set -e
-          echo 'ci-only-admin-password-0123' | python -m seed.bootstrap_admin --email admin.ci@example.org --name "Admin CI"
+          # Random per run: no credential literal in the repository.
+          python -c "import secrets; print(secrets.token_urlsafe(24))" \
+            | python -m seed.bootstrap_admin --email admin.ci@example.org --name "Admin CI"
           python -m seed.demo_users deactivate --confirm-host localhost
           python -m seed.demo_users check   # now clean: exit 0
       - name: Healthcheck da API contra o banco migrado
