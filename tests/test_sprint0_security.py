@@ -42,6 +42,20 @@ def test_development_keeps_dev_default():
     assert settings.jwt_secret_key == "dev-secret-change-in-production"
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "http://localhost:8080,https://ignis.example.org",
+        '["http://localhost:8080", "https://ignis.example.org"]',
+    ],
+)
+def test_cors_origins_accepts_documented_env_formats(monkeypatch, raw):
+    """Regression: the comma-separated format from .env.example crashed at boot."""
+    monkeypatch.setenv("CORS_ORIGINS", raw)
+    settings = Settings(_env_file=None)
+    assert settings.cors_origins == ["http://localhost:8080", "https://ignis.example.org"]
+
+
 def test_demo_modes_are_off_by_default():
     settings = Settings(_env_file=None)
     assert settings.orbital_alerts_demo_mode is False

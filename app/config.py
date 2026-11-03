@@ -1,8 +1,9 @@
 import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-change-in-production"
 MIN_PRODUCTION_SECRET_LENGTH = 32
@@ -47,7 +48,9 @@ class Settings(BaseSettings):
     external_api_timeout_seconds: int = 10
     external_api_cache_ttl_minutes: int = 60
 
-    cors_origins: list[str] = [
+    # NoDecode: without it pydantic-settings JSON-decodes the env value before the
+    # validator runs, so the documented comma-separated format crashed at boot.
+    cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:8080",
         "http://localhost:5173",
         "https://ignis-fire-watch-main.vercel.app",
