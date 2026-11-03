@@ -120,12 +120,15 @@ jobs:
             fi
             APP_ENV=$env python -m seed --if-allowed | grep -q "ignorado"
           done
-      - name: Procedimento de usuários demo (check → deactivate → check)
+      - name: Procedimento de usuários demo (check → bootstrap → deactivate → check)
         run: |
           set +e
           python -m seed.demo_users check; rc=$?
+          test "$rc" = "2" || exit 1   # seed accounts detected as risky
+          python -m seed.demo_users deactivate --confirm-host localhost; rc=$?
+          test "$rc" = "3" || exit 1   # refused: would leave no legitimate admin
           set -e
-          test "$rc" = "2"   # seed accounts must be detected as risky
+          echo 'ci-only-admin-password-0123' | python -m seed.bootstrap_admin --email admin.ci@example.org --name "Admin CI"
           python -m seed.demo_users deactivate --confirm-host localhost
           python -m seed.demo_users check   # now clean: exit 0
       - name: Healthcheck da API contra o banco migrado

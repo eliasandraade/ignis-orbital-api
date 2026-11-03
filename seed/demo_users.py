@@ -35,6 +35,10 @@ DEMO_EMAILS = frozenset(u["email"].lower() for u in USERS)
 _KNOWN_PASSWORDS = frozenset({u["password"] for u in USERS} | PUBLISHED_PASSWORDS)
 
 
+class WouldRemoveLastAdminError(RuntimeError):
+    """Deactivation would leave no legitimate active administrator."""
+
+
 @dataclass(frozen=True)
 class Finding:
     user_id: str
@@ -69,9 +73,27 @@ async def scan(db: AsyncSession) -> list[Finding]:
     return [f for f in findings if f.demo_email or f.published_password]
 
 
+def ensure_admin_remains(findings: list[Finding], active_admins: int) -> None:
+    """Refuse when every active administrator is about to be revoked."""
+    revoked_admins = sum(1 for f in findings if f.risky and f.role == "admin")
+    if revoked_admins and active_admins - revoked_admins < 1:
+        raise WouldRemoveLastAdminError(
+            "Recusado: a desativação deixaria o sistema sem administrador ativo. "
+            "Crie um administrador real antes: python -m seed.bootstrap_admin "
+            "--email <e-mail> --name <nome> (senha via stdin)."
+        )
+
+
 async def deactivate(db: AsyncSession, findings: list[Finding]) -> int:
+    from sqlalchemy import func
+
     from app.core.audit import log_action
     from app.users.model import User
+
+    active_admins = await db.scalar(
+        select(func.count()).select_from(User).where(User.role == "admin", User.is_active)
+    )
+    ensure_admin_remains(findings, int(active_admins or 0))
 
     count = 0
     for f in findings:
@@ -132,7 +154,11 @@ async def _main(argv: list[str]) -> int:
         if args.confirm_host != host:
             print(f"Recusado: --confirm-host={args.confirm_host!r} difere do host alvo {host!r}.")
             return 1
-        n = await deactivate(db, findings)
+        try:
+            n = await deactivate(db, findings)
+        except WouldRemoveLastAdminError as exc:
+            print(exc)
+            return 3
         print(f"{n} conta(s) desativada(s) e com senha invalidada.")
         return 0
 

@@ -58,6 +58,11 @@ Data: 03/11/2026 (Sprint 0.1).
    3. executa `python -m seed --if-allowed`, que **ignora** o seed em produção e registra no log "Seed demonstrativo ignorado";
    4. sobe o uvicorn com 2 workers e `--proxy-headers`.
 5. Gerar o domínio público e atualizar `CORS_ORIGINS`.
+6. **Criar o primeiro administrador real.** O banco novo não tem nenhum usuário, porque o seed é proibido em produção. Criar dentro do serviço (`railway ssh`), com a senha digitada no prompt, nunca na linha de comando:
+   ```bash
+   python -m seed.bootstrap_admin --email <e-mail-institucional> --name "<Nome>"
+   ```
+   A política de senha é a mesma da API: 12 a 72 bytes, sem senhas publicadas. O comando recusa e-mail duplicado e recusa um segundo bootstrap quando já há admin legítimo. A criação é auditada (`user.bootstrap_admin_created`).
 
 ## 5. Verificação pós-deploy (smoke)
 
@@ -82,7 +87,8 @@ Em banco **reaproveitado ou restaurado** de uma versão antiga (que rodava o see
    python -m seed.demo_users check     # exit 2 = contas ativas com e-mail demo ou senha publicada
    ```
    Executar dentro do serviço (`railway ssh` ou um comando one-off no próprio serviço), porque o banco fica em rede privada.
-2. **Com autorização do proprietário**, desativar:
+2. **Antes de desativar, garantir um administrador real ativo.** Se o banco só tem o admin do seed, criar o admin real com `python -m seed.bootstrap_admin` (§4, passo 6). Sem isso, o `deactivate` **recusa a operação** (exit 3), para não trancar o sistema: a API de usuários exige um admin ativo e tokens de contas desativadas deixam de valer na hora.
+3. **Com autorização do proprietário**, desativar:
    ```bash
    python -m seed.demo_users deactivate --confirm-host <host-do-DATABASE_URL>
    ```
@@ -91,8 +97,8 @@ Em banco **reaproveitado ou restaurado** de uma versão antiga (que rodava o see
    - hash trocado por um segredo aleatório;
    - auditoria `user.demo_credentials_revoked`;
    - nenhuma exclusão.
-3. Rodar `check` de novo e esperar exit 0.
-4. Criar as contas reais pelo `POST /api/v1/admin/users`, que recusa senhas publicadas e senhas com menos de 12 caracteres.
+4. Rodar `check` de novo e esperar exit 0.
+5. Criar as demais contas reais pelo `POST /api/v1/admin/users`, autenticado com o admin real, que recusa senhas publicadas e senhas com menos de 12 caracteres.
 
 O procedimento foi testado na CI e num PostGIS isolado (SPRINT-0-DELIVERY §3).
 
