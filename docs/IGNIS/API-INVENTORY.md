@@ -26,7 +26,7 @@ Em todos os endpoints de domínio, o banco de demonstração contém dados do **
 |---|---|---|---|---|
 | POST | `/api/v1/auth/login` | — | Real | **Rate limit 10/min/IP** (Sprint 0). Audita sucesso; falha não é auditada (B-17) |
 | GET | `/api/v1/auth/me` | qualquer autenticado | Real | |
-| GET/POST | `/api/v1/admin/users` | admin | Real | Paginado |
+| GET/POST | `/api/v1/admin/users` | admin | Real | Paginado. POST/PATCH (Sprint 0.1): senha de 12 a 72 bytes e fora da lista de senhas publicadas, `role` do enum, e-mail válido, sem campos extras |
 | GET/PATCH/DELETE | `/api/v1/admin/users/{id}` | admin | Real | DELETE = desativação lógica (`is_active=false`) |
 | GET | `/api/v1/admin/audit-logs` | admin | Real | Paginado |
 | GET | `/api/v1/admin/stats` | orgao | Real | Sem consumidor na UI |

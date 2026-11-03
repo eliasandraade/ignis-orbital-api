@@ -84,3 +84,22 @@ Data: 03/11/2026. Escopo: backend `ignis-orbital-api` e frontend `ignis-fire-wat
 | Rate limit | Teste (11ª tentativa → 429) + `curl` local + UI exibindo a mensagem 429 |
 | 401 → fim de sessão | `src/services/contracts.test.ts` (frontend) |
 | Dependências | `pip-audit` (81 pacotes, 0 vulnerabilidades); `npm audit` antes e depois |
+
+## 6. Atualização — Sprint 0.1 (03/11/2026)
+
+| Tema | Verificação | Resultado |
+|---|---|---|
+| Endpoints administrativos | `/api/v1/admin/*`, `/orbital-alerts/ingest`, criação de times/recursos: `require_role` no backend. Papel relido do banco a cada requisição | OK. Criação de usuário agora valida papel, senha e e-mail (B-24) |
+| Seeds e credenciais demo em produção | Seed só em development/test/demo, sem override (teste + CI). Senhas publicadas recusadas na API. `seed.demo_users` detecta e revoga contas existentes | **R-01 continua aberto até o proprietário executar o procedimento** em qualquer banco reaproveitado |
+| Proteção do JWT | Segredo forte obrigatório em staging e production; algoritmos só HS256/384/512; claims `exp`/`iat`/`sub` obrigatórias; expiração de 5–1440 min; testes para token sem assinatura, expirado e sem claim | OK. Pendentes: refresh, revogação e cookie HttpOnly (R-07) |
+| Variáveis ausentes ou inválidas | `APP_ENV` obrigatório e de lista fechada; `JWT_SECRET_KEY`/`DATABASE_URL` padrão recusados em ambiente operacional; `.env` com chaves desconhecidas não derruba o boot | Fail-closed (testes + CI + container verificado) |
+| Criação acidental de contas com senha pública | Seed bloqueado em ambiente operacional e API recusa senhas publicadas e curtas | OK |
+| Dependências do frontend | `npm audit --omit=dev`: **0** (antes 3, original 12). Total com dev: ver SPRINT-0-DELIVERY | CI falha com high/critical em runtime |
+| Dependências do backend | `pip-audit`: 0 vulnerabilidades conhecidas (CI) | Sem lockfile (Sonar S8565): Fase 1 P0-02 |
+| Falha de serviços externos | FIRMS: `unavailable` + backoff; Open-Meteo: `unavailable` e score "—" na UI; lookup de protocolo: 404 vira "não encontrado", 5xx vira erro explícito; Sala de Crise recupera após a API voltar | OK (testes + navegador) |
+| Imagem de container | Usuário não-root; `.dockerignore`; container sem `APP_ENV` não inicia | OK (CI) |
+
+**Riscos residuais atualizados:**
+- **R-03** vira condição de boot: o deploy falha se o segredo for fraco.
+- **R-08** resolvido.
+- **Novo R-12:** o projeto Railway da API não existe mais (X-03). Qualquer banco antigo restaurado deve passar por `seed.demo_users check`.

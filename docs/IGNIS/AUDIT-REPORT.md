@@ -99,3 +99,24 @@ Defeitos extras encontrados e corrigidos:
 - ids aleatórios a cada consulta (agora determinísticos).
 
 Semântica explícita: **foco de calor = anomalia térmica detectada por satélite, não confirmação de incêndio** (campo `disclaimer` na API e texto fixo na UI).
+
+## 6. Atualização — Sprint 0.1 (03/11/2026)
+
+Estado dos achados acima depois da Sprint 0.1, mais os achados novos desta rodada.
+
+| ID | Grav. | Achado | Estado |
+|---|---|---|---|
+| X-01 | P1 | `main`/`master` do frontend: **históricos sem ancestral comum** (`git merge-base` vazio) | Estratégia em `ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`. A execução é decisão do proprietário |
+| X-02 | P1 | Sem CI | **Corrigido**: GitHub Actions obrigatório nos dois repositórios (ver SPRINT-0-DELIVERY §8) |
+| X-03 | P1 | API de produção 404 | **Diagnosticado**: não existe projeto ou serviço IGNIS na conta Railway autenticada; recuperação = novo provisionamento ([RAILWAY-RECOVERY](RAILWAY-RECOVERY.md)) |
+| B-05 | P0 | Seed demo em produção | **Corrigido sem exceção**: o override `SEED_DEMO_DATA` foi removido; seed só em development/test/demo. Procedimento `seed.demo_users` pronto e **não executado** em produção |
+| B-22 | P1 | (Codex P1) `.env` com `SEED_DEMO_DATA`, ou o próprio `.env.example` (`POSTGRES_*`), derrubava o boot com `extra_forbidden` | **Corrigido** (`17bdd29`), com testes que carregam `.env` real |
+| B-23 | P1 | `APP_ENV` livre: um erro de digitação (`prod`) virava ambiente não operacional, com seed e segredo dev permitidos. Sem `APP_ENV` no container, o padrão era `development` | **Corrigido**: lista fechada + entrypoint exige `APP_ENV` (fail-closed) |
+| B-24 | P1 | `POST /admin/users` aceitava qualquer senha (inclusive `admin@123`) e qualquer string como `role` (papel inválido quebrava a autorização do usuário) | **Corrigido** (`f9d261b`): senha de 12 a 72 bytes, lista de senhas publicadas, `role` validado contra o enum, e-mail validado |
+| B-25 | P1 | `JWT_ALGORITHM` livre (aceitaria `none`); tokens sem `exp`/`iat`/`sub` aceitos | **Corrigido**: só família HS; claims obrigatórias |
+| B-26 | P1 | Sem `.dockerignore` (`.env`, `.venv`, `.git` iam para a imagem); container como root | **Corrigido** (`85e60b6`) |
+| B-27 | P2 | Protocolo público gerado com `random` (PRNG previsível) | **Corrigido**: `secrets.choice` |
+| B-28 | P2 | Em ambiente operacional, `DATABASE_URL` ausente caía no padrão de desenvolvimento com a senha publicada | **Corrigido**: boot recusado |
+| F-14 | P1 | Vulnerabilidades npm de runtime | **Corrigido**: 0 (zod 4.6.7, react-router 7.18.5) |
+| F-17 | P1 | (Codex P2) Botão de ativação de protocolo ficava indisponível para sempre após falha da API | **Corrigido** (`990b689`), validado no navegador |
+| F-18 | P2 | Protocolo inexistente (404) aparecia como "serviço indisponível" e acionava a faixa de falha (achado na validação da 0.1) | **Corrigido** (`23df18b`) |
