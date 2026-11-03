@@ -48,8 +48,9 @@ def _admin(risky: bool) -> Finding:
 
 def test_deactivation_refused_when_no_legitimate_admin_remains():
     """Codex P1 (PR #3): revoking the only (demo) admin would lock everyone out."""
+    findings = [_admin(True)]
     with pytest.raises(WouldRemoveLastAdminError):
-        ensure_admin_remains([_admin(True)], active_admins=1)
+        ensure_admin_remains(findings, active_admins=1)
 
 
 def test_deactivation_allowed_when_a_real_admin_exists():

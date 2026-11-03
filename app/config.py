@@ -6,8 +6,12 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-change-in-production"
-# No credentials in code: local setups pass DATABASE_URL (docker compose, .env).
-DEV_DATABASE_URL = "postgresql+asyncpg://ignis@localhost:5432/ignis_db"
+# Local-development placeholder only. It carries no credentials (local setups
+# pass DATABASE_URL via docker compose or .env) and is REJECTED at boot in
+# staging/production (reject_insecure_operational_secret, covered by
+# tests/test_sprint0_security.py) — so the "passwordless database" finding does
+# not apply to any operational deployment.
+DEV_DATABASE_URL = "postgresql+asyncpg://ignis@localhost:5432/ignis_db"  # NOSONAR python:S2115
 MIN_PRODUCTION_SECRET_LENGTH = 32
 # Defaults published in this repo (config, .env.example, docker-compose).
 _KNOWN_INSECURE_SECRETS = {
