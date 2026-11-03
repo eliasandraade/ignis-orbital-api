@@ -19,6 +19,17 @@ class MissingApiKeyError(RuntimeError):
     """Raised when NASA_FIRMS_MAP_KEY is not configured."""
 
 
+class InvalidFirmsResponseError(RuntimeError):
+    """Raised when FIRMS answers 200 but the body is not the expected CSV.
+
+    FIRMS returns plain-text errors (e.g. invalid MAP_KEY, quota exceeded)
+    with HTTP 200; parsing them as CSV would look like "zero fire spots".
+    """
+
+
+_REQUIRED_COLUMNS = {"latitude", "longitude", "acq_date"}
+
+
 def _require_key() -> str:
     key = settings.nasa_firms_map_key
     if not key:
@@ -41,7 +52,9 @@ async def fetch_viirs_csv(bbox: str, date: str | None = None) -> list[dict]:
 
     Raises:
         MissingApiKeyError: when NASA_FIRMS_MAP_KEY is absent.
-        httpx.HTTPError: on network or HTTP failure.
+        InvalidFirmsResponseError: when the body is not a FIRMS CSV.
+        httpx.HTTPError: on network or HTTP failure. The URL embeds the MAP_KEY,
+            so callers must never surface str(exc) — only the exception type.
     """
     key = _require_key()
     if date is None:
@@ -56,4 +69,6 @@ async def fetch_viirs_csv(bbox: str, date: str | None = None) -> list[dict]:
         response.raise_for_status()
 
     reader = csv.DictReader(io.StringIO(response.text))
+    if not _REQUIRED_COLUMNS.issubset(set(reader.fieldnames or [])):
+        raise InvalidFirmsResponseError("Resposta da NASA FIRMS não é um CSV de focos válido")
     return list(reader)
