@@ -274,11 +274,11 @@ Uma execução falhou por erro meu no workflow (run 41710469969, YAML inválido)
 | PR | Recomendação | Fundamento | Condições |
 |---|---|---|---|
 | **#3 backend** | **Mergear**, desde que a última re-revisão do Codex (`f93ae1d`) não traga apontamento P0/P1 | CI verde em todos os jobs; os dois P1 do Codex resolvidos e validados; não existe deploy ativo no Railway, então o merge **não afeta produção** | Antes do **próximo deploy** (não do merge): seguir RAILWAY-RECOVERY. O boot exige `APP_ENV`, `JWT_SECRET_KEY` forte e `DATABASE_URL` real |
-| **#4 frontend** | **Mergear**, com uma decisão consciente sobre deploy | CI verde; Codex sem apontamentos; 0 vulnerabilidades de runtime; elimina dados falsos e confirmações falsas | O merge em `master` **provavelmente publica em produção na Vercel** (`ignis-fire-watch`). Antes, confirmar na Vercel `VITE_USE_API`/`VITE_API_URL`. Com a API fora do ar, a interface mostrará "API indisponível", o comportamento honesto. Se a demo pública precisa continuar funcionando sem API, manter `VITE_USE_API=false` (modo demonstrativo rotulado) |
+| **#4 frontend** | **Mergear**, com uma decisão consciente sobre deploy. ⚠️ *Atualizado por §19: hospedagem só no Railway* | CI verde; Codex sem apontamentos; 0 vulnerabilidades de runtime; elimina dados falsos e confirmações falsas | O merge em `master` **provavelmente publica em produção na Vercel** (`ignis-fire-watch`). Antes, confirmar na Vercel `VITE_USE_API`/`VITE_API_URL`. Com a API fora do ar, a interface mostrará "API indisponível", o comportamento honesto. Se a demo pública precisa continuar funcionando sem API, manter `VITE_USE_API=false` (modo demonstrativo rotulado) |
 
 **Ordem recomendada:**
 1. Mergear o #3.
-2. Configurar a Vercel e mergear o #4.
+2. ~~Configurar a Vercel~~ (substituído, §19) e mergear o #4.
 3. Provisionar a API conforme RAILWAY-RECOVERY.
 4. Apontar o frontend para a nova API.
 
@@ -292,7 +292,7 @@ Uma execução falhou por erro meu no workflow (run 41710469969, YAML inválido)
    - exigir os checks da CI nos dois repositórios (`main` no backend, `master` no frontend);
    - exigir o Quality Gate do Sonar no backend.
 3. **Railway:** decidir entre recuperar o projeto antigo (outra conta?) e provisionar um novo (RAILWAY-RECOVERY).
-4. **Vercel:** confirmar a *Production Branch* e as variáveis dos dois projetos. Executar a estratégia de BRANCH-STRATEGY (tag de arquivamento + branch padrão `master`).
+4. ~~**Vercel:** confirmar a *Production Branch* e as variáveis.~~ **Substituído (§19):** desconectar o projeto Vercel e executar a estratégia de BRANCH-STRATEGY (tag de arquivamento + branch padrão `master`).
 5. **Usuários demo:**
    - em banco novo, executar `seed.bootstrap_admin`;
    - em banco reaproveitado, executar `bootstrap` → `demo_users check` → `deactivate` (com autorização).
@@ -343,3 +343,21 @@ O check `GitGuardian Security Checks` do PR #3 falhou com o incidente **33462092
 2. a re-revisão do Codex, que exige créditos.
 
 Não restam falhas de CI próprias nem comentários críticos abertos.
+
+## 19. Atualização de 03/11/2026: hospedagem só no Railway
+
+Decisões do proprietário:
+- **O IGNIS usa exclusivamente o Railway.** A Vercel foi descartada.
+- **O incidente GitGuardian 33462092 vira pendência administrativa conhecida.** Ele não bloqueia o desenvolvimento, e:
+  - nenhuma verificação de segurança foi desativada;
+  - nenhuma credencial demonstrativa é reutilizada (RAILWAY-DEPLOYMENT §11, D-5).
+
+O que mudou nas recomendações de §14 e §15:
+
+| Antes | Agora |
+|---|---|
+| Configurar a Vercel antes de mergear o #4 | Mergear o #4 **não** publica nada: o `vercel.json` desliga os deploys automáticos da Vercel (PR `infra/railway-only` do frontend) até o proprietário desconectar o projeto |
+| Provisionar a API seguindo RAILWAY-RECOVERY | Provisionar o projeto inteiro (api, web, postgis; staging + production) seguindo [RAILWAY-DEPLOYMENT](RAILWAY-DEPLOYMENT.md) e homologar com o [HOMOLOGATION-CHECKLIST](HOMOLOGATION-CHECKLIST.md) |
+| Produção do frontend a partir de `master` | Produção a partir do branch `production` nos dois repositórios, movido só pelo workflow `promote.yml` (fast-forward, com CI aprovada e aprovação manual) |
+
+A entrega técnica está nos PRs empilhados `infra/railway-only` (base: `audit/ignis-sprint-0`) dos dois repositórios.

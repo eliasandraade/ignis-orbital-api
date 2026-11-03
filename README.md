@@ -13,7 +13,7 @@ Projeto acadêmico desenvolvido para a disciplina **Global Solution 2026** — F
 
 ## Sobre o projeto
 
-A IGNIS Orbital API é o backend do sistema [IGNIS Orbital](https://ignis-fire-watch-main.vercel.app), uma plataforma de monitoramento ambiental focada em detecção e gestão de incidentes em áreas protegidas brasileiras.
+A IGNIS Orbital API é o backend do sistema [IGNIS Orbital](https://github.com/eliasandraade/ignis-fire-watch), uma plataforma de monitoramento ambiental focada em detecção e gestão de incidentes em áreas protegidas brasileiras.
 
 A API oferece:
 
@@ -264,10 +264,13 @@ O frontend [IGNIS Orbital](https://github.com/eliasandraade/ignis-fire-watch) ut
 mockados em `src/data/`. Esta API substituirá progressivamente esses mocks, módulo a módulo, via
 `src/services/api.ts` com `VITE_API_URL` apontando para esta API.
 
-CORS já configurado para:
-- `http://localhost:8080` (dev)
-- `http://localhost:5173` (Vite dev)
-- `https://ignis-fire-watch-main.vercel.app` (produção)
+CORS:
+- padrão local: `http://localhost:8080` (dev) e `http://localhost:5173` (Vite dev);
+- staging/production: `CORS_ORIGINS` aponta para o domínio do serviço `web` do mesmo ambiente Railway, e só aceita origens HTTPS explícitas.
+
+## Implantação
+
+Hospedagem exclusiva no **Railway** (staging + production), declarada em `.railway/railway.ts`. O plano completo está em [docs/IGNIS/RAILWAY-DEPLOYMENT.md](docs/IGNIS/RAILWAY-DEPLOYMENT.md) e a homologação em [docs/IGNIS/HOMOLOGATION-CHECKLIST.md](docs/IGNIS/HOMOLOGATION-CHECKLIST.md).
 
 ---
 

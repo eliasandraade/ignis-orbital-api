@@ -55,7 +55,7 @@ Data: 03/11/2026. Escopo: backend `ignis-orbital-api` e frontend `ignis-fire-wat
 | R-04 | Rate limit em memória por processo | Mover para Redis ou para a borda (Cloudflare/Railway) na Fase 1; ligar `TRUST_PROXY_HEADERS=true` só atrás de proxy confiável | Fase 1 |
 | R-05 | Transições de incidente livres; ativação de protocolo sem segundo fator | Máquina de estados + motivo obrigatório + papel mínimo por transição | Fase 1 (P1-07) |
 | R-06 | Auditoria mutável, sem IP e user agent | Tabela append-only (revogar UPDATE/DELETE do usuário da aplicação), IP e request id | Fase 3 |
-| R-07 | JWT em `localStorage`, sem CSP | Cookie `HttpOnly; Secure; SameSite=Strict` + CSRF, ou CSP estrita na Vercel (`vercel.json` headers) | Fase 1 (P1-08) |
+| R-07 | JWT em `localStorage`, sem CSP | **CSP estrita entregue** no nginx do serviço `web` (Railway): `script-src 'self'`, `connect-src` restrito à API e `frame-ancestors 'none'`. Falta: cookie `HttpOnly; Secure; SameSite=Strict` + CSRF | Fase 1 (P1-08) |
 | R-08 | zod < 4.6.6 (alta) e react-router 6.x (moderada) | Upgrade major com testes de formulário e rotas | Fase 1 (P2-03) |
 | R-09 | `/docs` público em produção | Proteger ou desabilitar com `APP_ENV=production`, mantendo o OpenAPI exportado no repositório | Fase 4 |
 | R-10 | Tiles do `tile.openstreetmap.org` em produção institucional violam a política de uso da OSMF | Provedor de tiles contratado ou próprio (ver ARCHITECTURE §4) | Fase 1 |
