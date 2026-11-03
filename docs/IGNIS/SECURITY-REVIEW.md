@@ -103,3 +103,20 @@ Data: 03/11/2026. Escopo: backend `ignis-orbital-api` e frontend `ignis-fire-wat
 - **R-03** vira condição de boot: o deploy falha se o segredo for fraco.
 - **R-08** resolvido.
 - **Novo R-12:** o projeto Railway da API não existe mais (X-03). Qualquer banco antigo restaurado deve passar por `seed.demo_users check`.
+
+**Complemento (fechamento da Sprint 0.1):**
+- **Bootstrap de administrador** (`python -m seed.bootstrap_admin`):
+  - é a única forma de criar o primeiro admin num banco operacional;
+  - a senha é lida do stdin;
+  - aplica a mesma política de senha da API e é auditado;
+  - o `demo_users deactivate` recusa a operação se não restar nenhum admin legítimo (Codex P1 nº 2).
+- **GitGuardian, incidente 33462092** ("Generic Password"):
+  - o valor detectado é a senha demo já publicada (`admin@123`), usada em teste que verifica que ela é **recusada**;
+  - não é um segredo de nenhum sistema ativo, porque o projeto Railway não existe mais e o seed não roda em produção;
+  - os testes não repetem mais o literal (`711b7f2`);
+  - a ocorrência histórica (`f9d261b`) deve ser classificada como falso positivo ou credencial de teste no painel, pelo proprietário;
+  - o histórico do PR não foi reescrito.
+- **Supply chain:**
+  - dependências Python travadas por hash (`uv.lock`) e instaladas só como wheels;
+  - actions do GitHub fixadas por SHA;
+  - `npm ci` com lockfile.

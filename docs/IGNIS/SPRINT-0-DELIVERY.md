@@ -162,3 +162,184 @@ Além disso, não existe CI que rode os testes nos PRs.
 5. **PR #2 do backend**: fechar ou rebasear conforme PHASE-1 P0-05 (X-05).
 6. **Chave NASA FIRMS** para a Fase 1 (cadastro gratuito, credencial do proprietário).
 7. **Parcerias institucionais** (CBMCE, Defesa Civil, municípios): pré-requisito das Fases 4–5. Nada foi presumido.
+
+---
+
+# Sprint 0.1 — Fechamento técnico e validação (03/11/2026)
+
+Objetivo: destravar a revisão dos PRs #3 e #4, estabelecer uma CI real e preparar uma decisão segura de merge. A Fase 1 **não** foi iniciada. A única exceção é o lockfile (P0-02), exigido pelo gate de segurança da CI.
+
+## 8. Commits da Sprint 0.1
+
+**ignis-orbital-api** (PR [#3](https://github.com/eliasandraade/ignis-orbital-api/pull/3)):
+
+| Commit | Conteúdo |
+|---|---|
+| `17bdd29` | Codex P1: `.env` real não derruba o boot; `APP_ENV` fail-closed; seed proibido em staging/production, sem override; JWT só HS |
+| `f9d261b` | Senhas publicadas e curtas recusadas; `role` validado; claims JWT obrigatórias |
+| `6fb911a` | Issues do Sonar (response_model redundante; justificativas de falsos positivos) |
+| `85e60b6` | Imagem não-root, `.dockerignore`, protocolo público com CSPRNG |
+| `05c2caf` | CI GitHub Actions |
+| `25fbde8` | Procedimento `seed.demo_users` (check/deactivate) |
+| `67ff35a` | `uv.lock` + exportações com hash; CI e Docker só com wheels travados; actions fixadas por SHA |
+| `cad9203` | Nenhuma credencial de banco no código |
+| `3bb5266` | Docs: RAILWAY-RECOVERY, AUDIT-REPORT §6, SECURITY-REVIEW §6 |
+| `832a1ef` | Correção do YAML da CI (`:all:` sem aspas) |
+| `0fa7996` | Codex P1 nº 2: `seed.bootstrap_admin` + trava contra desativar o último admin |
+| `f93ae1d` | Sonar: S2115 justificado (placeholder dev recusado em produção); S5778 |
+| `711b7f2` | Testes leem as senhas demo do seed, sem repetir literais (GitGuardian) |
+| `aeaa802` | Achados da revisão independente: CRLF no bootstrap, conta demo inativa, segredo/URL/senha triviais, `--reload` só em development, código read-only na imagem, exit codes |
+
+**ignis-fire-watch** (PR [#4](https://github.com/eliasandraade/ignis-fire-watch/pull/4)):
+
+| Commit | Conteúdo |
+|---|---|
+| `990b689` | Codex P2: a ativação de protocolo volta a ficar disponível quando a API se recupera (máquina de estados pura + 7 testes) |
+| `23df18b` | Lookup 404 vira "não encontrado", não falha do serviço (achado na validação) |
+| `4eb3df0` | zod 4, @hookform/resolvers 5, react-router 7: **0** vulnerabilidades em runtime |
+| `da496df` | CI GitHub Actions + cobertura (Vitest v8) |
+| `503a2c6` | Lint ignora `coverage/` |
+| `dc22dbb` | BRANCH-STRATEGY (`main` × `master`) |
+| `49057bc` | Actions fixadas por SHA |
+| `ee92f86` | FRONTEND-INVENTORY atualizado |
+
+## 9. Comentários do Codex
+
+| PR | Apontamento | Estado |
+|---|---|---|
+| #3 | P1: `SEED_DEMO_DATA` × Pydantic Settings (`extra_forbidden`) | **Resolvido** (`17bdd29`), com resposta e evidência no thread |
+| #3 | P1: o procedimento revogaria o único admin, e não há bootstrap em banco operacional novo (levantado na re-revisão de `3bb5266`) | **Resolvido** (`0fa7996`), com resposta e evidência no thread |
+| #4 | P2: botão de protocolo indisponível para sempre após falha | **Resolvido** (`990b689`), com resposta e evidência no thread |
+| #4 | Re-revisão de `49057bc` | **Sem apontamentos** (`has_any_findings: false`) |
+| #3 | Re-revisão de `f93ae1d` | **Não executada.** O Codex respondeu "You have reached your Codex usage limits for code reviews". Como compensação, foi feita uma revisão independente por agente separado (§17) |
+
+## 10. CI (GitHub Actions)
+
+| Repositório | Jobs | Execução de referência |
+|---|---|---|
+| backend | Lockfile em sincronia · Ruff · Pytest + cobertura (mínimo 75 %) · Migrations em PostGIS 16-3.4 isolado (upgrade/downgrade/upgrade, seed idempotente, seed recusado em production/staging, fluxo bootstrap → revogação de contas demo, healthcheck `/health` e `/ready`, ingestão sem token = 401) · pip-audit (prod + dev) · Docker build (import, não-root, recusa sem `APP_ENV`) · SonarQube Cloud (opt-in) | `0fa7996` → run 41711558917: **todos verdes** (Sonar *skipped*) |
+| frontend | Typecheck, lint, Vitest com cobertura, build nos modos API e demo · npm audit (runtime, falha com high/critical) · SonarQube Cloud (opt-in) | `49057bc` → run 41710565355: **todos verdes** (Sonar *skipped*) |
+
+**Prova de que teste com falha reprova o check.** PRs-canário temporários (draft, fechados e com a branch apagada, nada mergeado):
+
+| Repositório | Canário | Run | Resultado |
+|---|---|---|---|
+| backend | #4 | 41708759577 | `Pytest + cobertura: failure` (`assert 1 == 2`); demais jobs verdes |
+| frontend | #5 | 41708802497 | `Typecheck, lint, testes e build: failure` (`expected 1 to be 2`) |
+
+Uma execução falhou por erro meu no workflow (run 41710469969, YAML inválido), corrigido em `832a1ef`. `actionlint` 1.7.7 está limpo nos dois workflows.
+
+## 11. Cobertura
+
+| Escopo | Resultado |
+|---|---|
+| Backend total (`app/`) | **78,95 %** (2.608 instruções), mínimo exigido na CI: 75 % |
+| Backend, módulos alterados | `nasa_firms/client.py` 100 %, `nasa_firms/service.py` 97 %, `orbital_alerts_router.py` 100 %, `config.py` 95 %, `passwords.py` 91 %, `rate_limit.py` 83 % |
+| Frontend total (`src/`, exceto `components/ui`) | **5,3 %** de linhas. Páginas e componentes não têm teste, porque o projeto não tinha nenhum até a Sprint 0 |
+| Frontend, módulos de lógica alterados | `dataIntegrity` 96 %, `teamAdapter` 96 %, `actionState` 88 %, `client.ts` 87 %, `reportAdapter` 76 %; `protocolActivation` coberto por 7 testes dedicados |
+
+## 12. SonarQube Cloud
+
+- **Backend:** análise automática do SonarQube Cloud ativa. Evolução das issues novas no PR #3:
+  - análise inicial: 10;
+  - depois da CI e dos locks: 19, com Quality Gate **ERROR** (`new_security_rating` E);
+  - em `cad9203`: 4.
+
+  O que foi feito com cada regra:
+
+  | Regras | Tratamento |
+  |---|---|
+  | S8544, S8541 (deps sem lock / sem `--only-binary`), S7637 (actions sem SHA), S6698 (senha no código) | Corrigidas |
+  | S2115 | Falso positivo justificado com NOSONAR em `f93ae1d` |
+  | S5778 | Corrigida |
+  | S8410 (×2, `Annotated` em `Depends`, MINOR) | Mantida: o projeto inteiro usa `= Depends()`; a mudança será uma migração única |
+  | S7504, S7503 em `rate_limit.py` | Falsos positivos anotados no código |
+
+  **Estado final (`f93ae1d`): Quality Gate OK.** Segurança, confiabilidade e manutenibilidade em A; hotspots 100 % revisados; restam 2 issues MINOR (S8410), justificadas.
+- **Cobertura no Sonar:** **não publicada.** Exige `SONAR_TOKEN` (segredo inexistente) e desligar a Automatic Analysis; não alterei segredos nem configurações. O job está pronto e ativável pela variável `SONAR_CI_ANALYSIS=true` (§15).
+- **Frontend:** não existe projeto no SonarQube Cloud (`eliasandraade_ignis-fire-watch` não encontrado). `sonar-project.properties` e o job opt-in estão prontos.
+- **Branch `main` do backend** (preexistente, fora do PR): S2068 nas senhas do seed e dos testes, S6698 no `docker-compose.yml` (senha de dev padrão) e S1244 (floats em testes), todos fora de código operacional. S8565 (sem lockfile) fica resolvido quando o PR #3 for mergeado.
+
+## 13. Vulnerabilidades remanescentes
+
+| Origem | Situação |
+|---|---|
+| Python, prod e dev (`pip-audit` nos locks com hash) | **0** |
+| npm runtime (`npm audit --omit=dev`) | **0** (antes 3; no início da Sprint 0, 12) |
+| npm dev/build (`npm audit`) | 22 (1 alta, 2 críticas): `vitest` ≤ 4.1.10 e `tinypool` (críticas), `vite` ≤ 6.4.3 (alta). Afetam o servidor de desenvolvimento e o runner de testes, **não o bundle publicado**. A correção exige vite 6+/vitest 4 (major) → P1 da próxima sprint |
+| Imagem Docker | não-root e sem segredos copiados. Sem scanner de imagem (Trivy) ainda → P2 |
+
+## 14. Recomendação de merge
+
+| PR | Recomendação | Fundamento | Condições |
+|---|---|---|---|
+| **#3 backend** | **Mergear**, desde que a última re-revisão do Codex (`f93ae1d`) não traga apontamento P0/P1 | CI verde em todos os jobs; os dois P1 do Codex resolvidos e validados; não existe deploy ativo no Railway, então o merge **não afeta produção** | Antes do **próximo deploy** (não do merge): seguir RAILWAY-RECOVERY. O boot exige `APP_ENV`, `JWT_SECRET_KEY` forte e `DATABASE_URL` real |
+| **#4 frontend** | **Mergear**, com uma decisão consciente sobre deploy | CI verde; Codex sem apontamentos; 0 vulnerabilidades de runtime; elimina dados falsos e confirmações falsas | O merge em `master` **provavelmente publica em produção na Vercel** (`ignis-fire-watch`). Antes, confirmar na Vercel `VITE_USE_API`/`VITE_API_URL`. Com a API fora do ar, a interface mostrará "API indisponível", o comportamento honesto. Se a demo pública precisa continuar funcionando sem API, manter `VITE_USE_API=false` (modo demonstrativo rotulado) |
+
+**Ordem recomendada:**
+1. Mergear o #3.
+2. Configurar a Vercel e mergear o #4.
+3. Provisionar a API conforme RAILWAY-RECOVERY.
+4. Apontar o frontend para a nova API.
+
+## 15. Pendências que exigem o proprietário
+
+1. **SonarQube Cloud com cobertura:**
+   - desligar a Automatic Analysis no projeto backend;
+   - criar o segredo `SONAR_TOKEN` e a variável `SONAR_CI_ANALYSIS=true`;
+   - para o frontend, criar o projeto no SonarQube Cloud.
+2. **Proteção de branch:**
+   - exigir os checks da CI nos dois repositórios (`main` no backend, `master` no frontend);
+   - exigir o Quality Gate do Sonar no backend.
+3. **Railway:** decidir entre recuperar o projeto antigo (outra conta?) e provisionar um novo (RAILWAY-RECOVERY).
+4. **Vercel:** confirmar a *Production Branch* e as variáveis dos dois projetos. Executar a estratégia de BRANCH-STRATEGY (tag de arquivamento + branch padrão `master`).
+5. **Usuários demo:**
+   - em banco novo, executar `seed.bootstrap_admin`;
+   - em banco reaproveitado, executar `bootstrap` → `demo_users check` → `deactivate` (com autorização).
+6. **Upgrade das dependências de desenvolvimento do frontend** (vite 6+/vitest 4): agendar.
+
+## 16. Revisão independente (substitui a re-revisão do Codex)
+
+A re-revisão do Codex sobre `f93ae1d` não foi executada porque a conta atingiu o limite de uso. Para não deixar o último incremento sem segunda leitura, um agente separado fez uma revisão adversarial do diff `869382f..f93ae1d`. Ele trabalhou sem as conclusões do autor e em modo somente leitura.
+
+Resultado: **nenhum P0**, 1 P1 e 8 P2.
+
+| # | Grav. | Achado | Tratamento |
+|---|---|---|---|
+| 1 | P1 | `bootstrap_admin` mantinha o `\r` de pipes do Windows na senha. O admin criado ficava inutilizável e ainda liberava o `deactivate` | **Corrigido** (`aeaa802`) + teste |
+| 2 | P2 | Conta demo inativa mantinha o hash da senha publicada e podia ser reativada | **Corrigido**: senha publicada é risco mesmo em conta inativa, e o hash é rotacionado |
+| 3 | P2 | Segredo JWT trivial (`"x"*48`, espaços, valor publicado + sufixo) aceito em produção | **Corrigido** + testes |
+| 4 | P2 | `DATABASE_URL` vazio, sem senha ou variante dev aceito em produção | **Corrigido** + testes |
+| 5 | P2 | Política de senha aceitava espaços, baixa variedade e `Admin@123Admin` | **Corrigido** + testes |
+| 6 | P2 | `--reload` em `demo` e código gravável pelo usuário de runtime | **Corrigido**: reload só em `development`; código do root; a CI verifica |
+| 7 | P2 | Hash malformado derrubava o `scan` | **Corrigido** + teste |
+| 8 | P2 | Exit 2 do `check` colidia com erro de uso do argparse | **Corrigido**: risco = 4; último admin = 3 |
+| 9 | P2 | Espaço de protocolos `RP-YYYYMMDD-XXXX` (36⁴ por dia), enumerável apesar do CSPRNG | **Não corrigido** (preexistente; o formato é usado pelo frontend). Fase 1: protocolo mais longo + limite por protocolo |
+
+## 17. GitGuardian
+
+O check `GitGuardian Security Checks` do PR #3 falhou com o incidente **33462092** ("Generic Password").
+
+- **O que foi detectado:** a senha demo `admin@123`, já publicada em `seed/seed_users.py` desde `main`, que eu usei em testes que verificam que ela é **recusada** (commit `f9d261b`).
+- **Por que não é um segredo novo:** não é credencial de nenhum sistema ativo. O projeto Railway não existe mais, e o seed não roda em produção.
+- **O que foi feito:**
+  - os testes passaram a ler o valor do seed, sem novos literais (`711b7f2`);
+  - o histórico do PR **não** foi reescrito (sem force-push).
+- **Ação do proprietário:** classificar a ocorrência como falso positivo / credencial de teste no painel do GitGuardian. Enquanto isso não for feito, o check permanece vermelho, porque o literal continua no histórico.
+
+## 18. Critério final da Sprint 0.1
+
+| Critério | Situação |
+|---|---|
+| CI própria (GitHub Actions) sem falhas | ✅ nos últimos HEADs de código |
+| Comentários críticos do Codex resolvidos | ✅ 3 de 3 resolvidos, com resposta e evidência nos threads. ⚠️ A re-revisão final do backend não rodou (cota do Codex); foi substituída pela revisão independente (§16), sem P0 e com o P1 corrigido |
+| Riscos P0 tratados | ✅ seed/credenciais demo (bloqueio, bootstrap, revogação); `APP_ENV`/segredo/URL fail-closed. B-07 (isolamento entre instituições) continua P0 **arquitetural**, com tratamento definido: uso restrito a uma instituição até a Fase 4 |
+| Quality Gate do Sonar no PR #3 | ✅ OK (reanálise de `f93ae1d`); o estado após `aeaa802` está no relatório final |
+| Check GitGuardian do PR #3 | ❌ **vermelho** até o proprietário classificar o incidente 33462092 (§17) |
+
+**Conclusão: a Sprint 0.1 não pode ser declarada concluída.** Do lado técnico, tudo o que não depende de acesso privilegiado foi feito e verificado. Restam dois bloqueios que dependem do proprietário:
+
+1. o check do GitGuardian, que exige classificar o incidente no painel;
+2. a re-revisão do Codex, que exige créditos.
+
+Não restam falhas de CI próprias nem comentários críticos abertos.
