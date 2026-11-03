@@ -6,7 +6,8 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-change-in-production"
-DEV_DATABASE_URL = "postgresql+asyncpg://ignis:ignis_secret@db:5432/ignis_db"
+# No credentials in code: local setups pass DATABASE_URL (docker compose, .env).
+DEV_DATABASE_URL = "postgresql+asyncpg://ignis@localhost:5432/ignis_db"
 MIN_PRODUCTION_SECRET_LENGTH = 32
 # Defaults published in this repo (config, .env.example, docker-compose).
 _KNOWN_INSECURE_SECRETS = {
@@ -112,9 +113,11 @@ class Settings(BaseSettings):
                 f"JWT_SECRET_KEY inseguro para APP_ENV={self.app_env}: use um valor aleatório "
                 f"com pelo menos {MIN_PRODUCTION_SECRET_LENGTH} caracteres."
             )
-        if self.is_operational and "ignis_secret" in self.database_url:
+        if self.is_operational and (
+            self.database_url == DEV_DATABASE_URL or "ignis_secret" in self.database_url
+        ):
             raise ValueError(
-                f"DATABASE_URL ausente ou com a senha de desenvolvimento publicada "
+                f"DATABASE_URL ausente ou com a credencial de desenvolvimento publicada "
                 f"(APP_ENV={self.app_env})."
             )
         return self
