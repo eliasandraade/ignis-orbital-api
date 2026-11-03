@@ -22,7 +22,14 @@ _windows: dict[str, tuple[float, int]] = {}
 
 def client_ip(request: Request) -> str:
     settings = get_settings()
-    if settings.trust_proxy_headers:
+    if settings.trust_proxy_headers and settings.client_ip_header == "x-real-ip":
+        # Railway's edge overwrites X-Real-IP on every request, so a client copy
+        # never reaches the app. Its X-Forwarded-For hop count is not fixed:
+        # the rightmost entry may be an internal proxy shared by all clients.
+        real_ip = request.headers.get("x-real-ip", "").strip()
+        if real_ip:
+            return real_ip
+    elif settings.trust_proxy_headers:
         forwarded = request.headers.get("x-forwarded-for", "")
         # Rightmost entry is appended by the trusted proxy; leftmost ones are
         # client-controlled and can be spoofed.

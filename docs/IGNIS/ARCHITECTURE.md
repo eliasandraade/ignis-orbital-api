@@ -10,10 +10,18 @@ Data: 03/11/2026.
 | ORM / migrations | SQLAlchemy 2 async + asyncpg, Alembic (15 revisões, head `438a82832b4f`) | — | `alembic/versions/` |
 | Banco | PostgreSQL 16 + PostGIS 3.4 (`postgis/postgis:16-3.4`) | — | `docker-compose.yml` |
 | Auth | JWT HS256 (PyJWT), bcrypt (passlib) | 480 min | `app/core/security.py` |
-| Deploy backend | Docker no Railway (`entrypoint.sh`: migra, seed e uvicorn com 2 workers) | API documentada **fora do ar** (404) | X-03 |
+| Deploy backend | Docker no Railway. A API documentada estava **fora do ar** (404) | Alvo: serviço `api` com pre-deploy `migrate` e uvicorn com 2 workers | X-03, RAILWAY-DEPLOYMENT |
 | Frontend | React 18 + TypeScript 5 + Vite 5 + Tailwind/shadcn + TanStack Query 5 + react-router 6 + Leaflet 1.9/react-leaflet 4 + framer-motion | `package-lock.json` | `package.json` |
-| Deploy frontend | Vercel (SPA rewrite), branch de produção provável `master` | `ignis-fire-watch.vercel.app` → 200 | `vercel.json` |
+| Deploy frontend | **Railway** (decisão de 03/11/2026): serviço `web`, nginx não-root com SPA fallback, `/healthz` e CSP. Até então era Vercel, hoje descontinuada | — | `Dockerfile`, RAILWAY-DEPLOYMENT |
 | Testes | pytest + pytest-asyncio (158 testes); Vitest (24 testes, Sprint 0) | — | SPRINT-0-DELIVERY |
+
+## 1.1 Hospedagem: Railway exclusivo (decisão de 03/11/2026)
+
+Todo o IGNIS roda num único projeto Railway (`ignis`), com os ambientes **staging** e **production** isolados. Cada ambiente tem:
+- os serviços `web`, `api` e `postgis`;
+- volume, segredos e variáveis próprios.
+
+A infraestrutura é declarada em código (`.railway/railway.ts`) e verificada na CI. Os deploys esperam a CI (*Wait for CI*); produção só muda por promoção fast-forward do branch `production`. A Vercel não faz parte da arquitetura. Detalhes em [RAILWAY-DEPLOYMENT.md](RAILWAY-DEPLOYMENT.md).
 
 ## 2. Arquitetura atual (as-is)
 

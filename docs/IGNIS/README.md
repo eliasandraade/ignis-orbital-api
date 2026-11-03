@@ -16,8 +16,11 @@ O inventário de telas fica no repositório do frontend.
 | 8 | [ROADMAP.md](ROADMAP.md) | backend | Fases 1–5, dependências, prioridades e critérios de aceitação |
 | 9 | [PHASE-1-BACKLOG.md](PHASE-1-BACKLOG.md) | backend | Backlog técnico executável da Fase 1 |
 | 10 | [SPRINT-0-DELIVERY.md](SPRINT-0-DELIVERY.md) | backend | Correções, testes, evidências, PRs e pendências |
-| 11 | [RAILWAY-RECOVERY.md](RAILWAY-RECOVERY.md) | backend | Checklist de recuperação da API: variáveis, migrations, healthcheck, rollback, usuários demo |
-| 12 | [BRANCH-STRATEGY.md](https://github.com/eliasandraade/ignis-fire-watch/blob/audit/ignis-sprint-0/docs/IGNIS/BRANCH-STRATEGY.md) | frontend | Divergência `main` × `master` e alinhamento seguro |
+| 11 | [RAILWAY-RECOVERY.md](RAILWAY-RECOVERY.md) | backend | *Substituído pelos itens 13 e 14*; mantém o diagnóstico da Sprint 0.1 |
+| 12 | [BRANCH-STRATEGY.md](https://github.com/eliasandraade/ignis-fire-watch/blob/infra/railway-only/docs/IGNIS/BRANCH-STRATEGY.md) | frontend | Divergência `main` × `master`, branches por ambiente Railway e promoção |
+| 13 | [RAILWAY-DEPLOYMENT.md](RAILWAY-DEPLOYMENT.md) | backend | **Plano de implantação Railway-only**: ambientes, serviços, segredos, deploy condicionado à CI, rollback, evidências |
+| 14 | [HOMOLOGATION-CHECKLIST.md](HOMOLOGATION-CHECKLIST.md) | backend | Checklist de homologação (staging → production) |
+| 15 | [PHASE-1-EXECUTION-PLAN.md](PHASE-1-EXECUTION-PLAN.md) | backend | Plano de execução da Fase 1: INPE/FIRMS, PostGIS, mapa do Ceará |
 
 ## Repositórios
 

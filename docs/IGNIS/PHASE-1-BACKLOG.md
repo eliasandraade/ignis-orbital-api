@@ -121,7 +121,7 @@ flowchart LR
 | P1-05 | **Redis** para cache e rate limit compartilhado; `TRUST_PROXY_HEADERS` configurado no proxy real (R-04) | Limite efetivo igual com 2 workers (teste de integração) | — | P |
 | P1-06 | **Timezone**: modelos com `DateTime(timezone=True)` e remoção de `replace(tzinfo=None)`; migration de verificação (B-13) | `alembic check` sem diffs de tipo | P0-01 | P |
 | P1-07 | **Máquina de estados de incidente** + motivo obrigatório + papel mínimo por transição + auditoria em `events` (B-12, B-19) | Testes de transições inválidas → 409 | — | M |
-| P1-08 | **Sessão no frontend**: cookie HttpOnly + CSRF, ou CSP estrita nos headers da Vercel (R-07) | Header CSP presente; token fora do `localStorage` | — | M |
+| P1-08 | **Sessão no frontend**: cookie HttpOnly + CSRF (R-07). A CSP já está no nginx do Railway | Token fora do `localStorage`; CSP mantida | — | M |
 | P1-09 | **Exibir "atualizado às HH:MM"** por widget (`dataUpdatedAt` do React Query) e dado em cache marcado como tal | Todo widget com fonte e horário | P0-08 | P |
 | P1-10 | **Usuários demo em produção** (R-01): script de verificação/desativação idempotente, executado só com aprovação do proprietário | Relatório de usuários demo = 0 em produção | decisão | P |
 

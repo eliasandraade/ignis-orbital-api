@@ -58,3 +58,6 @@ logs/
 
 # === Ferramentas de desenvolvimento ===
 .gstack/
+
+# === Railway IaC (npm) ===
+.railway/node_modules/

@@ -19,8 +19,13 @@ from seed.seed_all import DemoSeedRefusedError, ensure_seed_allowed
 # Generated per run: a random secret, never a literal in the repository.
 STRONG_SECRET = secrets.token_hex(32)
 PROD_DB = "postgresql+asyncpg://app:not-a-real-password@db.internal:5432/ignis"
+WEB_ORIGIN = "https://ignis-web-staging.up.railway.app"
 # Minimal valid configuration for an operational environment.
-OPERATIONAL = {"jwt_secret_key": STRONG_SECRET, "database_url": PROD_DB}
+OPERATIONAL = {
+    "jwt_secret_key": STRONG_SECRET,
+    "database_url": PROD_DB,
+    "cors_origins": [WEB_ORIGIN],
+}
 
 # --- JWT secret guard ---------------------------------------------------------------
 
@@ -120,7 +125,7 @@ def test_dotenv_with_seed_demo_data_loads(tmp_path, monkeypatch, seed_value):
         tmp_path,
         monkeypatch,
         f"APP_ENV=production\nJWT_SECRET_KEY={STRONG_SECRET}\nDATABASE_URL={PROD_DB}\n"
-        f"SEED_DEMO_DATA={seed_value}\n",
+        f"CORS_ORIGINS={WEB_ORIGIN}\nSEED_DEMO_DATA={seed_value}\n",
     )
     assert settings.app_env == "production"
     assert settings.demo_seed_allowed is False
@@ -162,6 +167,9 @@ def test_entrypoint_requires_explicit_app_env_and_skips_seed_safely():
     script = (pathlib.Path(__file__).parent.parent / "scripts" / "entrypoint.sh").read_text()
     assert ': "${APP_ENV:?' in script
     assert "python -m seed --if-allowed" in script
+    # Railway pre-deploy runs only the migrate role; the API role can skip migrations.
+    assert "migrate)" in script
+    assert "MIGRATE_ON_START:-true" in script
     assert "SEED_DEMO_DATA" not in script
 
 
@@ -320,3 +328,110 @@ def test_operational_rejects_unsafe_database_urls(url):
         Settings(
             app_env="production", jwt_secret_key=STRONG_SECRET, database_url=url, _env_file=None
         )
+
+
+# --- Railway deployment (Railway-only hosting) ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            "postgresql://u:p@postgis.railway.internal:5432/ignis",
+            "postgresql+asyncpg://u:p@postgis.railway.internal:5432/ignis",
+        ),
+        ("postgres://u:p@h:5432/db", "postgresql+asyncpg://u:p@h:5432/db"),
+        ("postgresql://u:p@h/db?sslmode=require", "postgresql+asyncpg://u:p@h/db?ssl=require"),
+        ("postgresql+asyncpg://u:p@h/db", "postgresql+asyncpg://u:p@h/db"),
+    ],
+)
+def test_database_url_from_railway_uses_async_driver(raw, expected):
+    assert Settings(database_url=raw, _env_file=None).database_url == expected
+
+
+@pytest.mark.parametrize(
+    "origins",
+    [
+        [],
+        ["*"],
+        ["http://ignis-web.up.railway.app"],
+        ["http://localhost:8080"],
+        ["https://localhost:8080"],
+        [WEB_ORIGIN, "https://*.up.railway.app"],
+        [WEB_ORIGIN + "/app"],
+    ],
+)
+@pytest.mark.parametrize("app_env", ["staging", "production"])
+def test_operational_cors_requires_explicit_https_origins(app_env, origins):
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        Settings(app_env=app_env, **{**OPERATIONAL, "cors_origins": origins}, _env_file=None)
+
+
+def test_operational_cors_accepts_railway_domain_from_env(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", f"{WEB_ORIGIN}, https://ignis.example.org")
+    settings = Settings(
+        app_env="staging", jwt_secret_key=STRONG_SECRET, database_url=PROD_DB, _env_file=None
+    )
+    assert settings.cors_origins == [WEB_ORIGIN, "https://ignis.example.org"]
+
+
+def test_default_cors_has_no_hosted_origin():
+    """Railway-only: no third-party hosting domain is trusted by default."""
+    assert Settings(_env_file=None).cors_origins == [
+        "http://localhost:8080",
+        "http://localhost:5173",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("railway_env", "app_env"),
+    [("staging", "production"), ("production", "staging"), ("ignis-pr-7", "production")],
+)
+def test_railway_environment_mismatch_refuses_to_boot(railway_env, app_env):
+    with pytest.raises(ValidationError, match="ambiente Railway"):
+        Settings(
+            app_env=app_env, RAILWAY_ENVIRONMENT_NAME=railway_env, **OPERATIONAL, _env_file=None
+        )
+
+
+@pytest.mark.parametrize(
+    ("railway_env", "app_env"),
+    [("staging", "staging"), ("production", "production"), ("Production", "production"),
+     ("ignis-pr-7", "staging"), ("", "production")],
+)
+def test_railway_environment_match_boots(railway_env, app_env):
+    settings = Settings(
+        app_env=app_env, RAILWAY_ENVIRONMENT_NAME=railway_env, **OPERATIONAL, _env_file=None
+    )
+    assert settings.app_env == app_env
+
+
+def test_railway_environment_name_read_from_process_env(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+    with pytest.raises(ValidationError, match="ambiente Railway"):
+        Settings(app_env="staging", **OPERATIONAL, _env_file=None)
+
+
+def _request_with(client_host: str, headers: dict[str, str]) -> Request:
+    raw = [(k.encode(), v.encode()) for k, v in headers.items()]
+    return Request({"type": "http", "headers": raw, "client": (client_host, 1234)})
+
+
+def test_client_ip_uses_x_real_ip_on_railway(monkeypatch):
+    settings = rl.get_settings()
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+    monkeypatch.setattr(settings, "client_ip_header", "x-real-ip")
+    # The rightmost X-Forwarded-For hop can be a Railway proxy shared by everyone.
+    headers = {"x-real-ip": "203.0.113.9", "x-forwarded-for": "203.0.113.9, 100.64.0.7"}
+    req = _request_with("100.64.0.2", headers)
+    assert rl.client_ip(req) == "203.0.113.9"
+
+
+def test_client_ip_x_real_ip_ignored_unless_trusted(monkeypatch):
+    monkeypatch.setattr(rl.get_settings(), "client_ip_header", "x-real-ip")
+    assert rl.client_ip(_request_with("100.64.0.2", {"x-real-ip": "6.6.6.6"})) == "100.64.0.2"
+
+
+def test_client_ip_header_is_a_closed_set():
+    with pytest.raises(ValidationError):
+        Settings(client_ip_header="x-client-ip", _env_file=None)
