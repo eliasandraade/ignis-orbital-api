@@ -16,7 +16,10 @@ RUN pip install --no-cache-dir -e .
 
 COPY . .
 
-RUN chmod +x /app/scripts/entrypoint.sh
+RUN chmod +x /app/scripts/entrypoint.sh     && useradd --create-home --uid 10001 ignis     && chown -R ignis:ignis /app
+
+# Run as an unprivileged user (Sonar hotspot docker:S6471).
+USER ignis
 
 EXPOSE 8000
 
