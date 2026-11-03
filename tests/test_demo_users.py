@@ -10,17 +10,20 @@ from seed.demo_users import (
     classify,
     ensure_admin_remains,
 )
+from seed.seed_users import USERS
+
+DEMO_PW = {u["role"]: u["password"] for u in USERS}
 
 
 def test_seed_demo_account_with_published_password_is_risky():
-    f = classify("1", "admin@ignis-orbital.com", "admin", True, hash_password("admin@123"))
+    f = classify("1", "admin@ignis-orbital.com", "admin", True, hash_password(DEMO_PW["admin"]))
     assert f.demo_email
     assert f.published_password
     assert f.risky
 
 
 def test_real_account_reusing_a_published_password_is_flagged():
-    f = classify("2", "pessoa@orgao.example", "gestor", True, hash_password("gestor@123"))
+    f = classify("2", "pessoa@orgao.example", "gestor", True, hash_password(DEMO_PW["gestor"]))
     assert not f.demo_email
     assert f.published_password
     assert f.risky
@@ -33,7 +36,7 @@ def test_clean_account_is_not_flagged():
 
 
 def test_inactive_demo_account_is_not_risky():
-    f = classify("4", "campo@ibama.gov.br", "campo", False, hash_password("campo@123"))
+    f = classify("4", "campo@ibama.gov.br", "campo", False, hash_password(DEMO_PW["campo"]))
     assert f.demo_email
     assert not f.risky
 
@@ -67,7 +70,7 @@ def test_bootstrap_rejects_published_or_short_password():
 
     from app.users.schemas import UserCreate
 
-    for pw in ("admin@123", "curta"):
+    for pw in (DEMO_PW["admin"], "curta"):
         with pytest.raises(ValidationError):
             UserCreate(name="Admin Real", email="admin@orgao.example", password=pw, role="admin")
 

@@ -9,6 +9,11 @@ from pydantic import ValidationError
 
 from app.core.security import create_access_token, decode_token
 from app.users.schemas import UserCreate, UserUpdate
+from seed.seed_users import USERS
+
+# Published demo passwords come from the seed itself (no new literals): the
+# tests assert that the admin API rejects exactly these values.
+DEMO_PW = {u["role"]: u["password"] for u in USERS}
 
 VALID = {
     "name": "Operadora Teste",
@@ -20,7 +25,7 @@ VALID = {
 
 @pytest.mark.parametrize(
     "password",
-    ["admin@123", "gestor@123", "curta", "ADMIN@123", "x" * 73],
+    [DEMO_PW["admin"], DEMO_PW["gestor"], "curta", DEMO_PW["admin"].upper(), "x" * 73],
 )
 def test_user_create_rejects_published_short_or_oversized_passwords(password):
     with pytest.raises(ValidationError):
@@ -43,7 +48,7 @@ def test_user_create_accepts_strong_password():
 def test_user_update_password_policy_applies_only_when_set():
     assert UserUpdate(name="Novo Nome").password is None
     with pytest.raises(ValidationError):
-        UserUpdate(password="admin@123")
+        UserUpdate(password=DEMO_PW["admin"])
 
 
 async def test_admin_api_rejects_demo_password(client):
@@ -54,7 +59,7 @@ async def test_admin_api_rejects_demo_password(client):
     admin = type("U", (), {"id": uuid.uuid4(), "name": "a", "role": "admin", "is_active": True})()
     app.dependency_overrides[get_current_user] = lambda: admin
     response = await client.post(
-        "/api/v1/admin/users", json={**VALID, "password": "admin@123"}
+        "/api/v1/admin/users", json={**VALID, "password": DEMO_PW["admin"]}
     )
     assert response.status_code == 422
 
