@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from app.core.enums import ReportStatus, ReportType, ReportUrgency
 
@@ -71,16 +71,34 @@ class ReportStatusPublic(BaseModel):
 
 
 class ReportCreate(BaseModel):
+    """Public, unauthenticated input — every field is bounded."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
     type: ReportType
-    description: str
+    description: str = Field(min_length=10, max_length=4000)
     urgency: ReportUrgency
-    latitude: float | None = None
-    longitude: float | None = None
-    reporter_name: str | None = None
-    contact: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    reporter_name: str | None = Field(default=None, max_length=255)
+    contact: str | None = Field(default=None, max_length=255)
     is_anonymous: bool = False
-    evidence_urls: list[str] = []
+    evidence_urls: list[HttpUrl] = Field(default_factory=list, max_length=10)
     protected_area_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def enforce_anonymity(self) -> "ReportCreate":
+        # An anonymous report must not store identifying data.
+        if self.is_anonymous:
+            self.reporter_name = None
+            self.contact = None
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude e longitude devem ser informadas juntas")
+        return self
+
+    @property
+    def evidence_url_strings(self) -> list[str]:
+        return [str(u) for u in self.evidence_urls]
 
 
 class ReportStatusUpdate(BaseModel):

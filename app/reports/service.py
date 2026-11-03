@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 import uuid
 from datetime import UTC, date, datetime
@@ -14,7 +14,10 @@ from app.reports.schemas import ReportCreate, ReportRead, ReportStatusUpdate
 
 
 def _generate_protocol() -> str:
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    # The protocol is the only credential for the public status lookup, so it
+    # must not come from a predictable PRNG (Sonar hotspot python:S2245).
+    alphabet = string.ascii_uppercase + string.digits
+    suffix = "".join(secrets.choice(alphabet) for _ in range(4))
     return f"RP-{date.today().strftime('%Y%m%d')}-{suffix}"
 
 
@@ -38,7 +41,7 @@ async def create_report(db: AsyncSession, data: ReportCreate) -> ReportRead:
         longitude=data.longitude,
         location=location_wkt,
         protected_area_id=data.protected_area_id,
-        evidence_urls=data.evidence_urls or [],
+        evidence_urls=data.evidence_url_strings,
     )
     db.add(report)
     await db.flush()

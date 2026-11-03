@@ -1,5 +1,9 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# Fail closed: without an explicit APP_ENV the API would default to
+# "development", where demo data and the development JWT secret are allowed.
+: "${APP_ENV:?APP_ENV deve ser definido (development|test|demo|staging|production)}"
 
 echo "==> [IGNIS Orbital API] Aguardando banco de dados..."
 until python -c "
@@ -20,12 +24,15 @@ done
 echo "==> [IGNIS Orbital API] Banco disponível. Aplicando migrations..."
 alembic upgrade head
 
-echo "==> [IGNIS Orbital API] Aplicando seed demonstrativo..."
-python -m seed
+# The demo seed creates users with published passwords. Python decides from
+# APP_ENV (development/test/demo only); staging/production are always skipped.
+python -m seed --if-allowed
 
 echo "==> [IGNIS Orbital API] Iniciando servidor..."
-if [ "${APP_ENV:-development}" = "production" ]; then
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+# --reload only for local development: a reachable deploy (demo/staging/production)
+# must never re-execute code written at runtime.
+if [[ "$APP_ENV" == "development" ]]; then
+    exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --reload
 else
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 2 --proxy-headers
 fi

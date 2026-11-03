@@ -108,8 +108,13 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate      # Windows
 
-# Instalar dependências
-pip install -e ".[dev]"
+# Instalar dependências (versões travadas, iguais às da CI e do Docker)
+pip install --require-hashes --only-binary :all: -r requirements-dev.lock
+
+# Ao alterar dependências no pyproject.toml, regenere o lock e as exportações:
+#   uv lock
+#   uv export --frozen --no-dev --no-emit-project --format requirements-txt -o requirements.lock
+#   uv export --frozen --extra dev --no-emit-project --format requirements-txt -o requirements-dev.lock
 
 # Copiar .env e ajustar DATABASE_URL para apontar para banco local
 cp .env.example .env
