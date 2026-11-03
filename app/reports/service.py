@@ -38,7 +38,7 @@ async def create_report(db: AsyncSession, data: ReportCreate) -> ReportRead:
         longitude=data.longitude,
         location=location_wkt,
         protected_area_id=data.protected_area_id,
-        evidence_urls=data.evidence_urls or [],
+        evidence_urls=data.evidence_url_strings,
     )
     db.add(report)
     await db.flush()

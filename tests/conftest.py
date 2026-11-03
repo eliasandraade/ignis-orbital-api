@@ -3,8 +3,21 @@ from unittest.mock import AsyncMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.rate_limit import reset_rate_limits
 from app.database import get_db
+from app.integrations._cache import cache_clear
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _isolate_process_state():
+    """In-memory caches and rate-limit counters must not leak between tests."""
+    cache_clear()
+    reset_rate_limits()
+    yield
+    cache_clear()
+    reset_rate_limits()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_action
 from app.core.enums import ReportStatus, ReportType, ReportUrgency, UserRole
 from app.core.pagination import Page
+from app.core.rate_limit import rate_limit
 from app.database import get_db
 from app.dependencies import require_role
 from app.reports import service as report_service
@@ -14,7 +15,12 @@ from app.reports.schemas import ReportCreate, ReportRead, ReportStatusPublic, Re
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
 
-@router.post("", response_model=ReportRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ReportRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("report-submit", limit=10))],
+)
 async def submit_report(
     body: ReportCreate,
     db: AsyncSession = Depends(get_db),
@@ -49,6 +55,7 @@ async def list_reports(
     "/lookup",
     response_model=ReportStatusPublic,
     summary="Consulta pública de denúncia por protocolo",
+    dependencies=[Depends(rate_limit("report-lookup", limit=30))],
     description="Retorna o status da denúncia sem expor dados pessoais do denunciante.",
 )
 async def lookup_by_protocol(

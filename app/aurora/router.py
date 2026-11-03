@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.aurora import engine as aurora_engine
 from app.aurora.schemas import AnalyzeRequest, AnalyzeResponse, ChatRequest, ChatResponse
 from app.core.enums import UserRole
+from app.core.rate_limit import rate_limit
 from app.dependencies import require_role
 
 router = APIRouter(prefix="/api/v1/aurora", tags=["aurora"])
@@ -17,7 +18,11 @@ async def analyze_incident(
     return aurora_engine.analyze(body)
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(rate_limit("aurora-chat", limit=30))],
+)
 async def chat_with_aurora(body: ChatRequest) -> ChatResponse:
     """Public rule-based chat endpoint — no auth, no DB, no external AI calls."""
     return aurora_engine.chat(body.message, body.context)

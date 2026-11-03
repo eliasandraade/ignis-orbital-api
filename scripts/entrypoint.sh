@@ -20,8 +20,15 @@ done
 echo "==> [IGNIS Orbital API] Banco disponível. Aplicando migrations..."
 alembic upgrade head
 
-echo "==> [IGNIS Orbital API] Aplicando seed demonstrativo..."
-python -m seed
+# Seed demonstrativo contém usuários com senhas públicas: nunca roda em produção
+# por padrão. Fora de produção roda sempre; em produção só com SEED_DEMO_DATA=true
+# (uso exclusivo para ambiente de demonstração acadêmica, nunca operacional).
+if [ "${APP_ENV:-development}" != "production" ] || [ "${SEED_DEMO_DATA:-false}" = "true" ]; then
+    echo "==> [IGNIS Orbital API] Aplicando seed demonstrativo..."
+    python -m seed
+else
+    echo "==> [IGNIS Orbital API] APP_ENV=production: seed demonstrativo ignorado."
+fi
 
 echo "==> [IGNIS Orbital API] Iniciando servidor..."
 if [ "${APP_ENV:-development}" = "production" ]; then

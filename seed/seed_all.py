@@ -1,9 +1,28 @@
 import asyncio
+import os
 
+from app.config import get_settings
 from app.database import AsyncSessionLocal
 
 
+class DemoSeedRefusedError(RuntimeError):
+    """Raised when the demo seed would run in production without explicit opt-in."""
+
+
+def ensure_seed_allowed() -> None:
+    """The demo seed creates users with published passwords (see seed_users.py).
+
+    Refuse to run it with APP_ENV=production unless SEED_DEMO_DATA=true.
+    """
+    if get_settings().is_production and os.environ.get("SEED_DEMO_DATA", "false") != "true":
+        raise DemoSeedRefusedError(
+            "Seed demonstrativo recusado em APP_ENV=production. "
+            "Defina SEED_DEMO_DATA=true apenas em ambiente de demonstração."
+        )
+
+
 async def run_all() -> None:
+    ensure_seed_allowed()
     print("==> Iniciando seed demonstrativo IGNIS Orbital...")
     async with AsyncSessionLocal() as db:
         from seed.seed_areas import seed_areas

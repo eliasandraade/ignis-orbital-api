@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.core.rate_limit import rate_limit
 from app.integrations.open_meteo.schemas import WeatherRiskResponse
 from app.integrations.open_meteo.service import get_weather_risk
 
 router = APIRouter(prefix="/api/v1/environment", tags=["environment"])
 
 
-@router.get("/weather-risk", response_model=WeatherRiskResponse)
+@router.get(
+    "/weather-risk",
+    response_model=WeatherRiskResponse,
+    dependencies=[Depends(rate_limit("weather-risk", limit=60))],
+)
 async def weather_risk(
     lat: float = Query(..., ge=-90, le=90, description="Latitude"),
     lng: float = Query(..., ge=-180, le=180, description="Longitude"),
