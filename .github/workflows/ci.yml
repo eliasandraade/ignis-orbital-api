@@ -103,6 +103,14 @@ jobs:
             fi
             APP_ENV=$env python -m seed --if-allowed | grep -q "ignorado"
           done
+      - name: Procedimento de usuários demo (check → deactivate → check)
+        run: |
+          set +e
+          python -m seed.demo_users check; rc=$?
+          set -e
+          test "$rc" = "2"   # seed accounts must be detected as risky
+          python -m seed.demo_users deactivate --confirm-host localhost
+          python -m seed.demo_users check   # now clean: exit 0
       - name: Healthcheck da API contra o banco migrado
         run: |
           uvicorn app.main:app --port 8000 &
