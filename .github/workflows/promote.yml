@@ -1,0 +1,77 @@
+name: Promover para produção
+
+# Railway's production environment deploys from the `production` branch (see
+# .railway/railway.ts). This workflow is the only intended way to move it:
+# manual, approved through the GitHub "production" environment, and limited to
+# a fast-forward to a commit that already passed CI on the default branch —
+# the exact commit staging ran. No force-push, no merge commit, no new SHA.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit de main a promover (vazio = HEAD de main)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+env:
+  SOURCE_BRANCH: main
+  TARGET_BRANCH: production
+
+jobs:
+  promote:
+    name: Fast-forward production
+    runs-on: ubuntu-latest
+    # Required reviewers / wait timer are configured on this environment in
+    # Settings → Environments (docs/IGNIS/RAILWAY-DEPLOYMENT.md §6).
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Resolver o commit
+        id: target
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+        run: |
+          sha="${INPUT_SHA:-$(git rev-parse "origin/$SOURCE_BRANCH")}"
+          sha=$(git rev-parse --verify "${sha}^{commit}")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Commit: $sha"
+      - name: O commit pertence ao branch padrão
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          git merge-base --is-ancestor "$SHA" "origin/$SOURCE_BRANCH" \
+            || { echo "::error::$SHA não está em $SOURCE_BRANCH"; exit 1; }
+      - name: A CI passou nesse commit (push em main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          ok=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&status=success" \
+            --jq '.total_count')
+          test "$ok" -gt 0 || { echo "::error::sem execução bem-sucedida da CI para $SHA"; exit 1; }
+      - name: Somente fast-forward
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          if git rev-parse --verify -q "origin/$TARGET_BRANCH" >/dev/null; then
+            git merge-base --is-ancestor "origin/$TARGET_BRANCH" "$SHA" \
+              || { echo "::error::$TARGET_BRANCH divergiu de $SOURCE_BRANCH; promoção recusada"; exit 1; }
+            git log --oneline "origin/$TARGET_BRANCH..$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Primeira promoção: $TARGET_BRANCH será criado em $SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Publicar (push sem --force)
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: git push origin "$SHA:refs/heads/$TARGET_BRANCH"
