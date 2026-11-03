@@ -2,7 +2,7 @@ import json
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-change-in-production"
@@ -47,6 +47,36 @@ def _unsafe_database_url(url: str) -> bool:
     )
 
 
+def _async_database_url(url: str) -> str:
+    """Accept the plain URLs that Railway/Heroku-style providers expose.
+
+    The app and Alembic use SQLAlchemy's asyncpg dialect, while providers hand
+    out ``postgres://`` or ``postgresql://``. asyncpg takes ``ssl`` rather than
+    libpq's ``sslmode``.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    if parts.scheme not in ("postgres", "postgresql"):
+        return url
+    query = urlencode([("ssl" if k == "sslmode" else k, v) for k, v in parse_qsl(parts.query)])
+    return urlunsplit(parts._replace(scheme="postgresql+asyncpg", query=query))
+
+
+def _unsafe_cors_origin(origin: str) -> bool:
+    """Operational CORS allows only explicit HTTPS origins (credentials are allowed)."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(origin)
+    return (
+        parts.scheme != "https"
+        or not parts.hostname
+        or "*" in origin
+        or parts.hostname in ("localhost", "127.0.0.1")
+        or parts.path not in ("", "/")
+    )
+
+
 AppEnv = Literal["development", "test", "demo", "staging", "production"]
 
 # Operational environments: no demo data, no published credentials, strong secrets.
@@ -72,6 +102,14 @@ class Settings(BaseSettings):
     app_env: AppEnv = "development"
     debug: bool = False
 
+    # Name of the Railway environment this process runs in, injected by Railway
+    # (RAILWAY_ENVIRONMENT_NAME). Used only to refuse a configuration copied to
+    # the wrong environment; empty outside Railway.
+    railway_environment_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("RAILWAY_ENVIRONMENT_NAME", "RAILWAY_ENVIRONMENT"),
+    )
+
     database_url: str = DEV_DATABASE_URL
 
     jwt_secret_key: str = DEV_JWT_SECRET
@@ -82,10 +120,13 @@ class Settings(BaseSettings):
     # Fictitious orbital alerts are served only when explicitly enabled.
     orbital_alerts_demo_mode: bool = False
 
-    # Rate limiting (in-memory, per process). When behind a trusted reverse
-    # proxy (Railway), take the client IP from the rightmost X-Forwarded-For.
+    # Rate limiting (in-memory, per process). Behind a trusted reverse proxy the
+    # client IP comes from CLIENT_IP_HEADER: Railway's edge overwrites
+    # X-Real-IP on every request; a generic single proxy appends the rightmost
+    # X-Forwarded-For entry.
     rate_limit_enabled: bool = True
     trust_proxy_headers: bool = False
+    client_ip_header: Literal["x-forwarded-for", "x-real-ip"] = "x-forwarded-for"
 
     # External API base URLs
     open_meteo_base_url: str = "https://api.open-meteo.com/v1"
@@ -97,12 +138,17 @@ class Settings(BaseSettings):
 
     # NoDecode: without it pydantic-settings JSON-decodes the env value before the
     # validator runs, so the documented comma-separated format crashed at boot.
+    # Local development only; operational environments must set CORS_ORIGINS to
+    # the frontend's Railway domain (see .railway/railway.ts).
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:8080",
         "http://localhost:5173",
-        "https://ignis-fire-watch-main.vercel.app",
-        "https://ignis-fire-watch.vercel.app",
     ]
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def use_async_driver(cls, v: str) -> str:
+        return _async_database_url(v)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -145,6 +191,29 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"DATABASE_URL ausente ou com a credencial de desenvolvimento publicada "
                 f"(APP_ENV={self.app_env})."
+            )
+        if self.is_operational and (
+            not self.cors_origins or any(_unsafe_cors_origin(o) for o in self.cors_origins)
+        ):
+            raise ValueError(
+                f"CORS_ORIGINS deve listar apenas origens HTTPS explícitas do frontend "
+                f"(APP_ENV={self.app_env})."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def reject_environment_mismatch(self) -> "Settings":
+        """A production config copied to staging (or vice versa) must not boot.
+
+        Railway environments are isolated (own database and variables); this
+        catches the human error of pasting another environment's variables.
+        """
+        railway_env = self.railway_environment_name.strip().lower()
+        guarded = railway_env in OPERATIONAL_ENVS or self.app_env == "production"
+        if railway_env and guarded and railway_env != self.app_env:
+            raise ValueError(
+                f"APP_ENV={self.app_env} não corresponde ao ambiente Railway "
+                f"'{self.railway_environment_name}'."
             )
         return self
 

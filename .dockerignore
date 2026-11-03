@@ -16,3 +16,5 @@ pytest-report.xml
 htmlcov/
 .gstack/
 docs/
+.railway/
+tests/
