@@ -1,0 +1,116 @@
+# IGNIS Orbital — guia de validação do Admin Cockpit
+
+Como atualizar a pilha local **preservando** o banco de validação (dados reais do INPE e malha
+oficial do IBGE), validar o cockpit à mão e reproduzir os testes automatizados.
+
+## 1. Atualizar o ambiente local sem perder dados
+
+Pré-requisitos: Docker Desktop, os dois repositórios lado a lado
+(`ignis/ignis-orbital-api` e `ignis/ignis-fire-watch`) nas branches `feat/ignis-admin-cockpit`.
+
+```bash
+cd ignis-orbital-api
+git fetch && git switch feat/ignis-admin-cockpit && git pull
+cd ../ignis-fire-watch
+git fetch && git switch feat/ignis-admin-cockpit && git pull
+cd ../ignis-orbital-api
+bash deploy/local/validate.sh up
+```
+
+`up` reconstrói as imagens, roda `alembic upgrade head` (aplica só a migração nova, `a015`),
+confere a malha IBGE (SHA-256, sem reimportar se igual), prepara as contas locais, faz uma ingestão
+INPE ao vivo e sobe o web. **O volume `ignis-validation_pgdata` é mantido.**
+
+Nunca use `validate.sh reset` para atualizar: ele apaga o volume, os dados ingeridos e as senhas
+locais. Para conferir que nada se perdeu:
+
+```bash
+bash deploy/local/validate.sh status
+```
+
+Esperado: migração `a015`, 184 municípios + 1 UF, focos e execuções ≥ os de antes.
+
+Credenciais locais: `bash deploy/local/validate.sh credentials` (geradas por instalação, só nesta
+máquina; contas `admin|gestor|campo.validacao@example.org`).
+
+## 2. Roteiro manual (≈ 15 min)
+
+1. `http://localhost:8080/login` como **admin** → abre `/admin`. Confira: API "Respondendo", banco
+   "Conectado" com latência, worker, focos persistidos e municípios monitorados batem com
+   `GET /api/v1/admin/overview`; bloco "Métricas não disponíveis" presente.
+2. **Usuários → Novo usuário**: nome, e-mail, papel "Equipe de campo", senha provisória (Gerar),
+   motivo. A conta aparece com "Troca de senha pendente" e "Sem registro" de login.
+3. Em outra janela anônima, entre com a conta nova → a tela pede a troca de senha → após trocar,
+   cai em "Operação de campo".
+4. De volta ao admin, na gaveta do usuário: edite o nome (salva), **Alterar papel** com senha errada
+   (recusa, registrada) e depois correta. A sessão do usuário na janela anônima cai ao recarregar.
+5. **Desativar** com motivo e sua senha. Na janela anônima, tente entrar: "E-mail ou senha
+   incorretos, ou conta sem acesso." (mesma mensagem de senha errada).
+6. Abra **a sua própria conta** em Usuários: aviso "Esta é a sua conta" e ações bloqueadas.
+7. **Auditoria**: filtre por "Usuário criado", "Papel alterado", "Conta desativada"; abra um evento
+   (ator, alvo, motivo, resultado); **Exportar CSV** e confira que a exportação aparece na trilha.
+8. **Fontes de dados**: NASA FIRMS "Não configurada"/"Desativada" sem chave (nunca "Operando");
+   INPE com último sucesso. **Executar** INPE → acompanhe em **Execuções**.
+9. **API e diagnóstico**: "Executar" diagnóstico (HTTP 200), abra uma operação e execute um GET.
+10. **Permissões** e **Configuração**: somente leitura, sem segredos.
+11. Saia e entre como **gestor** e **campo**: `/admin` mostra "Acesso não permitido"; o menu não tem
+    Admin Cockpit.
+12. Celular (ou janela estreita): o menu vira gaveta (botão ☰), tabelas rolam na horizontal.
+
+## 3. Testes automatizados
+
+### Backend (pytest contra PostGIS real)
+
+```bash
+docker run -d --name ignis-test-pg -e POSTGRES_USER=ignis -e POSTGRES_PASSWORD=local-only \
+  -e POSTGRES_DB=postgres -p 127.0.0.1:55434:5432 postgis/postgis:16-3.4
+IGNIS_TEST_POSTGIS_URL=postgresql://ignis:local-only@127.0.0.1:55434/postgres \
+IGNIS_REQUIRE_POSTGIS_TESTS=1 APP_ENV=test .venv/Scripts/python -m pytest -q
+```
+
+Use `127.0.0.1`, não `localhost`: no Windows, `localhost` tenta `::1` primeiro e cada conexão espera
+~2 s, deixando a suíte lenta.
+
+`tests/test_postgis_admin.py` (23 testes) cobre: negação de todos os endpoints admin para campo,
+gestor e órgão (401 anônimo); criação sem eco de senha e e-mail único sem distinção de caixa; troca
+obrigatória de senha bloqueando a API e rotacionando a sessão; bloqueio otimista; step-up com falha
+auditada; motivo obrigatório; auto-ações bloqueadas; último administrador legítimo; rebaixamento
+mútuo concorrente (sobra 1 admin); edição concorrente (200 + 409); desativação com login recusado e
+resposta idêntica à de conta inexistente; redefinição de senha; paginação/filtros/busca; auditoria
+(filtros, envolvido, período, sanitização, CSV com proteção de fórmula, exportação auditada); métricas
+do cockpit iguais ao SQL; fontes/configuração sem segredos; execuções com filtros e detalhe; matriz de
+permissões = OpenAPI; `/docs` desligado em staging com especificação admin protegida; metadados
+profissionais sem texto acadêmico.
+
+### Frontend
+
+```bash
+npm ci --ignore-scripts
+npm run typecheck && npm run lint && npm test && npm run build
+```
+
+Unitários: fuso de Fortaleza, conversão de filtros para UTC, espelho de permissões, gerador de senha
+provisória, explorador OpenAPI, mensagens de erro 422/5xx, trilhas e menus (sem Aurora/ESG/Economia/
+Ranking), destino por papel e troca pendente, rótulos de auditoria, estados de erro/vazio/paginação.
+
+### E2E (Playwright contra a pilha real)
+
+```bash
+bash deploy/local/validate.sh e2e                       # tudo
+bash deploy/local/validate.sh e2e e2e/admin.spec.ts     # só o cockpit
+```
+
+`e2e/admin.spec.ts`: login admin → cockpit com métricas iguais à API → fontes/execuções → criar
+usuário → primeiro acesso com troca de senha → editar → papel com senha errada e certa → sessão do
+usuário revogada → desativar → login da conta desativada recusado → histórico → própria conta
+protegida (UI e API 409) → auditoria → API docs autorizada sem token em URL → gestor e campo negados
+(tela e API 403) → nenhuma tela operacional com dados fictícios ou texto acadêmico; rotas removidas
+dão 404. Cada execução cria uma conta `e2e.<timestamp>@example.org` que termina **desativada** (não
+há exclusão física).
+
+Capturas: `IGNIS_EVIDENCE_DIR=… node e2e/capture-admin-evidence.mjs` (com as variáveis
+`IGNIS_E2E_PASSWORD_ADMIN` e `IGNIS_E2E_PASSWORD_GESTOR`), somente leitura.
+
+## 4. Resultados desta entrega
+
+Preenchido na seção "Resultados" abaixo.
