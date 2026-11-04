@@ -53,9 +53,11 @@ def detection(**overrides) -> NormalizedDetection:
 
 
 def test_dedup_key_is_deterministic_and_a_uuid():
-    assert detection().dedup_key == detection().dedup_key
-    assert isinstance(detection().dedup_key, uuid.UUID)
-    assert detection().dedup_key.version == 5
+    first, second = detection(), detection()
+    assert first is not second
+    assert first.dedup_key == second.dedup_key
+    assert isinstance(first.dedup_key, uuid.UUID)
+    assert first.dedup_key.version == 5
 
 
 def test_dedup_key_ignores_timezone_representation_and_subseconds():
@@ -115,8 +117,9 @@ def test_detection_contract_accepts_minimal_record():
 
 
 def test_time_window_requires_aware_ordered_instants():
+    naive_start, naive_end = datetime(2026, 1, 1), datetime(2026, 1, 2)
     with pytest.raises(ValueError):
-        TimeWindow(start=datetime(2026, 1, 1), end=datetime(2026, 1, 2))
+        TimeWindow(start=naive_start, end=naive_end)
     with pytest.raises(ValueError):
         TimeWindow(start=T0, end=T0)
     window = TimeWindow.last(timedelta(days=1), now=T0)
@@ -124,8 +127,9 @@ def test_time_window_requires_aware_ordered_instants():
 
 
 def test_provider_result_never_carries_data_on_failure():
+    data = (detection(),)
     with pytest.raises(ValueError):
-        ProviderResult(product="p", status="unavailable", detections=(detection(),))
+        ProviderResult(product="p", status="unavailable", detections=data)
     with pytest.raises(ValueError):
         ProviderResult(product="p", status="ok", rejected=-1)
     assert ProviderResult(product="p", status="disabled").detections == ()
@@ -134,7 +138,10 @@ def test_provider_result_never_carries_data_on_failure():
 def test_bbox_contains_the_official_extent_of_ceara():
     # Extent of CE_Municipios_2025 (IBGE): -41.4235, -7.8582, -37.2527, -2.7843.
     lon_min, lat_min, lon_max, lat_max = CEARA_BBOX
-    assert lon_min < -41.4235 and lat_min < -7.8582 and lon_max > -37.2527 and lat_max > -2.7843
+    assert lon_min < -41.4235
+    assert lat_min < -7.8582
+    assert lon_max > -37.2527
+    assert lat_max > -2.7843
 
 
 # --- official IBGE files -----------------------------------------------------
@@ -215,8 +222,9 @@ def test_tampered_file_is_refused(dataset_copy):
     payload = bytearray(archive.read_bytes())
     payload[-1] ^= 0xFF
     archive.write_bytes(bytes(payload))
+    manifest = load_manifest(dataset_copy)
     with pytest.raises(DatasetIntegrityError, match="SHA-256"):
-        verify_files(load_manifest(dataset_copy))
+        verify_files(manifest)
 
 
 def test_unexpected_crs_is_refused(dataset_copy):
@@ -238,9 +246,10 @@ def test_manifest_hash_identifies_the_file_set(dataset_copy):
     raw = json.loads(path.read_text(encoding="utf-8"))
     raw["files"][0]["sha256"] = "0" * 64
     path.write_text(json.dumps(raw), encoding="utf-8")
-    assert load_manifest(dataset_copy).content_sha256 != original
+    changed = load_manifest(dataset_copy)
+    assert changed.content_sha256 != original
     with pytest.raises(DatasetIntegrityError):
-        load_manifest(dataset_copy).file("nonexistent")
+        changed.file("nonexistent")
 
 
 def test_cli_verify_files_reports_tampering(dataset_copy, capsys):

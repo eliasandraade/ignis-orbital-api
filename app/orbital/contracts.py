@@ -92,6 +92,14 @@ def compute_dedup_key(
     return uuid.uuid5(DEDUP_NAMESPACE, name)
 
 
+def _is_label(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and len(value) <= 64
+
+
+def _in_range(value: float, low: float, high: float) -> bool:
+    return isinstance(value, int | float) and math.isfinite(value) and low <= value <= high
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedDetection:
     source: DetectionSource
@@ -111,26 +119,23 @@ class NormalizedDetection:
     def __post_init__(self) -> None:
         if not isinstance(self.source, DetectionSource):
             raise InvalidDetectionError(f"fonte desconhecida: {self.source!r}")
-        for name in ("product", "satellite", "instrument"):
-            value = getattr(self, name)
-            if not isinstance(value, str) or not value.strip() or len(value) > 64:
-                raise InvalidDetectionError(f"{name} inválido: {value!r}")
         if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
             raise InvalidDetectionError("observed_at sem fuso horário")
-        if not (math.isfinite(self.latitude) and -90 <= self.latitude <= 90):
-            raise InvalidDetectionError(f"latitude fora do intervalo: {self.latitude!r}")
-        if not (math.isfinite(self.longitude) and -180 <= self.longitude <= 180):
-            raise InvalidDetectionError(f"longitude fora do intervalo: {self.longitude!r}")
-        if self.confidence not in (None, "low", "nominal", "high"):
-            raise InvalidDetectionError(f"confidence inválida: {self.confidence!r}")
-        if self.daynight not in (None, "D", "N"):
-            raise InvalidDetectionError(f"daynight inválido: {self.daynight!r}")
-        if self.frp_mw is not None and not (math.isfinite(self.frp_mw) and self.frp_mw >= 0):
-            raise InvalidDetectionError(f"frp_mw inválido: {self.frp_mw!r}")
-        if self.brightness_k is not None and not (
-            math.isfinite(self.brightness_k) and self.brightness_k > 0
-        ):
-            raise InvalidDetectionError(f"brightness_k inválido: {self.brightness_k!r}")
+        checks = {
+            "product": _is_label(self.product),
+            "satellite": _is_label(self.satellite),
+            "instrument": _is_label(self.instrument),
+            "latitude": _in_range(self.latitude, -90, 90),
+            "longitude": _in_range(self.longitude, -180, 180),
+            "confidence": self.confidence in (None, "low", "nominal", "high"),
+            "daynight": self.daynight in (None, "D", "N"),
+            "frp_mw": self.frp_mw is None or _in_range(self.frp_mw, 0, math.inf),
+            "brightness_k": self.brightness_k is None
+            or (_in_range(self.brightness_k, 0, math.inf) and self.brightness_k > 0),
+        }
+        for name, ok in checks.items():
+            if not ok:
+                raise InvalidDetectionError(f"{name} inválido: {getattr(self, name)!r}")
 
     @property
     def dedup_key(self) -> uuid.UUID:

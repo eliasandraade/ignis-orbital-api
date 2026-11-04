@@ -225,7 +225,8 @@ async def test_dataset_provenance_is_recorded(geo_engine):
     assert dataset.source_crs == "EPSG:4674"
     assert dataset.feature_count == 185
     assert {f["name"] for f in dataset.files} == {"CE_Municipios_2025.zip", "CE_UF_2025.zip"}
-    assert attributes["NM_MUN"] == "Fortaleza" and attributes["CD_MUN"] == "2304400"
+    assert attributes["NM_MUN"] == "Fortaleza"
+    assert attributes["CD_MUN"] == "2304400"
     assert audits >= 1
 
 
@@ -249,7 +250,8 @@ async def test_reimport_is_idempotent_and_restores_drift(geo_engine):
 
     assert (repaired.inserted, repaired.updated, repaired.unchanged) == (0, 1, 184)
     assert (again.inserted, again.updated, again.unchanged) == (0, 0, 185)
-    assert not again.dataset_created and again.not_in_dataset == []
+    assert not again.dataset_created
+    assert again.not_in_dataset == []
     async with geo_engine.connect() as conn:
         after = (
             await conn.execute(text("SELECT ibge_code, id, updated_at FROM jurisdictions"))
@@ -314,21 +316,18 @@ async def test_concurrent_first_imports_store_everything_once(fresh_database):
     ],
 )
 async def test_boundary_integrity_is_enforced_by_the_database(geo_engine, statement, constraint):
+    sql = text(statement)
     async with geo_engine.connect() as conn:
         with pytest.raises(IntegrityError, match=constraint):
-            await conn.execute(text(statement))
+            await conn.execute(sql)
         await conn.rollback()
 
 
 async def test_wrong_srid_is_refused_by_the_column_type(geo_engine):
+    sql = text("UPDATE jurisdictions SET geom = ST_SetSRID(geom, 4674) WHERE ibge_code = '2304400'")
     async with geo_engine.connect() as conn:
         with pytest.raises(DBAPIError, match="SRID"):
-            await conn.execute(
-                text(
-                    "UPDATE jurisdictions SET geom = ST_SetSRID(geom, 4674)"
-                    " WHERE ibge_code = '2304400'"
-                )
-            )
+            await conn.execute(sql)
         await conn.rollback()
 
 
@@ -386,11 +385,13 @@ async def test_batch_counters_match_what_was_written(clean_orbital):
                 )
             )
         ).all()
-    assert stored.status == "ok" and stored.finished_at is not None
+    assert stored.status == "ok"
+    assert stored.finished_at is not None
     assert stored[2:8] == (7, 5, 2, 2, 2, 1)
     assert stored.rows_written == stored.records_inserted == 2
     assert [(r.ibge_code, r.srid) for r in located] == [("2304400", 4326), ("2307304", 4326)]
-    assert located[0].observed_at == T0 and located[0].observed_at.tzinfo is not None
+    assert located[0].observed_at == T0
+    assert located[0].observed_at.tzinfo is not None
 
 
 async def test_reprocessing_a_window_writes_nothing(clean_orbital):
@@ -432,8 +433,9 @@ async def test_finished_runs_are_frozen(clean_orbital):
         run_id = (await start(session)).id
         await repository.finish_run(session, run_id, RunStatus.PARTIAL, error_message="x" * 900)
         await session.commit()
+        late = [detection(FORTALEZA)]
         with pytest.raises(repository.RunNotActiveError):
-            await repository.persist_batch(session, run_id, [detection(FORTALEZA)])
+            await repository.persist_batch(session, run_id, late)
         await session.rollback()
         with pytest.raises(repository.RunNotActiveError):
             await repository.finish_run(session, run_id, RunStatus.OK)
@@ -592,9 +594,10 @@ async def test_detection_integrity_is_enforced_by_the_database(
             session, run.id, [detection(FORTALEZA), detection(FORTALEZA, minute=5)]
         )
         await session.commit()
+    sql = text(statement)
     async with engine.connect() as conn:
         with pytest.raises(IntegrityError, match=constraint):
-            await conn.execute(text(statement))
+            await conn.execute(sql)
         await conn.rollback()
 
 

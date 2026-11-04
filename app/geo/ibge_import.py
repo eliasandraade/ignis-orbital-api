@@ -130,7 +130,7 @@ def read_layer(manifest: Manifest, role: str, code_field: str, name_field: str) 
         )
         features = []
         for record in reader.iterShapeRecords():
-            attributes = {k: v for k, v in record.record.as_dict().items()}
+            attributes = record.record.as_dict()
             geometry = _as_multipolygon(shape(record.shape.__geo_interface__))
             code = str(attributes[code_field])
             if not geometry.is_valid or geometry.is_empty:

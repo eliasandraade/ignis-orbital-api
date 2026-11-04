@@ -22,6 +22,7 @@ down_revision: str | None = "438a82832b4f"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+GEN_UUID = "gen_random_uuid()"
 SOURCES = "('NASA_FIRMS', 'INPE_QUEIMADAS')"
 COUNTERS = (
     "records_fetched",
@@ -49,7 +50,7 @@ def upgrade() -> None:
             "id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=sa.text(GEN_UUID),
         ),
         sa.Column("source", sa.String(64), nullable=False),
         sa.Column("product", sa.String(128), nullable=False),
@@ -76,7 +77,7 @@ def upgrade() -> None:
             "id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=sa.text(GEN_UUID),
         ),
         sa.Column("level", sa.String(16), nullable=False),
         sa.Column("ibge_code", sa.String(7), nullable=False, unique=True),
@@ -133,7 +134,7 @@ def upgrade() -> None:
             "id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=sa.text(GEN_UUID),
         ),
         sa.Column("source", sa.String(32), nullable=False),
         sa.Column("product", sa.String(64), nullable=False),
@@ -207,7 +208,7 @@ def upgrade() -> None:
             "id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=sa.text(GEN_UUID),
         ),
         sa.Column("dedup_key", postgresql.UUID(as_uuid=True), nullable=False, unique=True),
         sa.Column("source", sa.String(32), nullable=False),
