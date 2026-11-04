@@ -111,6 +111,28 @@ há exclusão física).
 Capturas: `IGNIS_EVIDENCE_DIR=… node e2e/capture-admin-evidence.mjs` (com as variáveis
 `IGNIS_E2E_PASSWORD_ADMIN` e `IGNIS_E2E_PASSWORD_GESTOR`), somente leitura.
 
-## 4. Resultados desta entrega
+## 4. Resultados desta entrega (04/11/2026, Windows 11 + Docker Desktop)
 
-Preenchido na seção "Resultados" abaixo.
+| Verificação | Resultado |
+|---|---|
+| pytest completo contra PostGIS real | **429 passed, 1 skipped**, cobertura total 87% (`app/users/*` 93–100%, `app/admin/router.py` 88%, `app/audit/*` 92–100%) |
+| `tests/test_postgis_admin.py` | 23/23 |
+| ruff | sem apontamentos |
+| Frontend `typecheck` / `lint` | limpo / 0 erros (9 avisos react-refresh pré-existentes em `components/ui`, `UserContext`, `router`) |
+| Vitest | 56/56 (6 arquivos) |
+| Build + varredura do bundle | OK; nenhuma ocorrência de FIAP/Global Solution/RM/MOCK_USERS/FALLBACK_; nenhum chunk de Aurora/ESG/Economia/Ranking |
+| Playwright (pilha local real) | **27/27** (9 do cockpit + 18 anteriores; desktop e mobile) |
+| Pilha local | `a014 → a015` aplicada com `validate.sh up`; volume preservado; 185 jurisdições; focos e execuções acrescidos por ingestões INPE reais |
+| Capturas | 16 em `evidence/admin-cockpit-2026-11-04/` |
+
+Defeitos encontrados e corrigidos durante a validação:
+- execuções presas em `running` por diferença de relógio API × banco (pré-existente; ver revisão de segurança §9);
+- texto de ajuda dentro do `<label>` contaminava o nome acessível dos campos (o campo de senha respondia por "E-mail");
+- `/health` público expunha versão e ambiente;
+- índice "Risco meteorológico 0–100" sem metodologia validada aparecia no painel e na sala de crise (agora só medições);
+- isolamento entre testes: a fixture de admin apagava o registro de importação do IBGE usado por outro módulo.
+
+Apontamento de CI: o GitGuardian marcou como "Generic Password" uma senha **de teste** literal no
+primeiro commit do PR (`tests/test_postgis_admin.py`). As senhas de teste passaram a ser geradas por
+execução (commit seguinte); o incidente já registrado no painel do GitGuardian precisa ser marcado
+pelo proprietário (não há segredo real; o histórico não foi reescrito).
