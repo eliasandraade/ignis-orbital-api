@@ -1,11 +1,14 @@
 #!/bin/bash
-# Usage: entrypoint.sh [api|migrate]
+# Usage: entrypoint.sh [api|migrate|ingest]
 #   api      (default) wait for the database, optionally migrate, run the demo
 #            seed where allowed, then serve HTTP.
 #   migrate  wait for the database, apply migrations, load the official IBGE
 #            boundaries (idempotent) and exit. Railway runs it as the
 #            pre-deploy command: once per deploy, before any replica of the new
 #            version starts, and a failure aborts the deploy.
+#   ingest   wait for the database, run one orbital ingestion round (NASA
+#            FIRMS + INPE) and exit with its code. Railway cron service,
+#            every 15 min, restart policy NEVER (.railway/railway.ts).
 set -euo pipefail
 
 # A platform may either replace the image ENTRYPOINT with the configured
@@ -86,8 +89,12 @@ case "$ROLE" in
                 --workers "${WEB_CONCURRENCY:-2}" --proxy-headers
         fi
         ;;
+    ingest)
+        wait_for_database
+        exec python -m app.orbital.worker
+        ;;
     *)
-        echo "Papel desconhecido: '$ROLE' (use api ou migrate)" >&2
+        echo "Papel desconhecido: '$ROLE' (use api, migrate ou ingest)" >&2
         exit 64
         ;;
 esac

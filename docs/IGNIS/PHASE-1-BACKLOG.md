@@ -71,6 +71,12 @@ flowchart LR
 - **Esforço:** M.
 
 ### P0-04 — Worker de ingestão NASA FIRMS
+> **Implementado na Sprint 1.2** com ajustes ([SPRINT-1.2-DELIVERY](SPRINT-1.2-DELIVERY.md)):
+> - job cron `orbital-ingest` (uma rodada por execução) em vez de processo contínuo;
+> - 4 produtos NRT;
+> - recuperação por *lease* (advisory lock de sessão) em vez de `pg_try_advisory_lock` global;
+> - `POST /ingest` devolve 202 com as execuções reais.
+
 - Novo processo `python -m app.workers.ingest` (serviço separado no deploy), com agendamento a cada 30 min (config `FIRMS_INGEST_INTERVAL_MINUTES`).
 - Reusar `nasa_firms/client.py`: validação de CSV e mensagens sem a chave já estão prontas.
 - Janela de 1–2 dias (`FIRE_LOOKBACK_DAYS`), bbox do Ceará configurável (`FIRE_BBOX`; hoje `_DEFAULT_BBOX` cobre CE/PI/MA/TO).
@@ -84,6 +90,8 @@ flowchart LR
 - **Dependências:** P0-03. Esforço: M.
 
 ### P0-05 — Ingestão INPE (Programa Queimadas)
+> **Implementado na Sprint 1.2** com o CSV diário de dados abertos em vez do WFS (justificativa em SPRINT-1.2-DELIVERY §2.2). Nada do PR #2 foi reaproveitado.
+
 - Rebasear o cliente do PR #2 (`app/integrations/inpe_queimadas/`) sobre o contrato da Sprint 0. **Não** reaproveitar o agregador com fallback demo (X-05).
 - Normalizar para `orbital_detections` com `source=INPE_QUEIMADAS`.
 - Deduplicação entre fontes: mesma posição dentro de 375 m e janela de ±30 min mantém os dois registros e os vincula por `cluster_id`. Não apagar nenhum.

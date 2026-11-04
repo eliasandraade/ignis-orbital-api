@@ -1,6 +1,6 @@
 # IGNIS — Plano de execução da Fase 1: dados reais do Ceará
 
-Data: 03/11/2026. **Status:** Sprint 1.1 entregue em PR (sem merge); ver [SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md). As Sprints 1.2 a 1.4 não foram iniciadas.
+Data: 03/11/2026, atualizado em 04/11/2026. **Status:** Sprints 1.1 e 1.2 entregues em PRs empilhados, sem merge ([SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md), [SPRINT-1.2-DELIVERY](SPRINT-1.2-DELIVERY.md)). As Sprints 1.3 e 1.4 não foram iniciadas.
 O plano detalha **como** executar o [PHASE-1-BACKLOG](PHASE-1-BACKLOG.md) na plataforma Railway ([RAILWAY-DEPLOYMENT](RAILWAY-DEPLOYMENT.md)). Os IDs `P0-xx`/`P1-xx` são os do backlog.
 
 ## 1. Objetivo e resultado esperado
@@ -24,7 +24,7 @@ Quando a fonte falha, a interface diz que falhou (`unavailable`/`stale`). Ela nu
 | Contrato honesto de `orbital-alerts` (`source_status`, `persisted=false`) | Sprint 0 |
 | Cliente FIRMS com validação de CSV, backoff e chave fora dos logs | `app/integrations/nasa_firms/` |
 | Infra Railway: staging/production, PostGIS 16-3.4, pre-deploy `migrate` | `.railway/railway.ts` |
-| Slot do job agendado `firms-ingest` (cron `*/15`), desligado | `railway.ts` (`ENABLE_FIRMS_INGEST_JOB`) |
+| Job agendado `orbital-ingest` (cron `*/15`), pronto e desligado (Sprint 1.2) | `railway.ts` (`ENABLE_ORBITAL_INGEST_JOB`, `ingestJob()`) |
 
 **Pré-requisitos do proprietário:**
 - merge dos PRs da Sprint 0/0.1 e desta preparação;
@@ -38,7 +38,7 @@ Quando a fonte falha, a interface diz que falhou (`unavailable`/`stale`). Ela nu
 ```mermaid
 flowchart LR
   subgraph RW["Railway — ambiente (staging | production)"]
-    JOB["firms-ingest<br/>cron */15 · mesma imagem da api<br/>entrypoint.sh firms-ingest"]
+    JOB["orbital-ingest<br/>cron */15 · mesma imagem da api<br/>entrypoint.sh ingest"]
     API["api<br/>GET /orbital-alerts lê o banco"]
     WEB["web<br/>camada de detecções no mapa do CE"]
     PG[("postgis<br/>orbital_detections · ingestion_runs<br/>jurisdictions · protected_areas")]
@@ -55,7 +55,7 @@ Decisões de desenho:
 - **Job agendado, não daemon.** Cada execução do cron do Railway faz uma rodada completa (busca → valida → grava → registra `ingestion_runs`) e termina, com `restartPolicy NEVER`.
   - Não há processo de longa duração para monitorar nem estado em memória.
   - O `pg_try_advisory_lock` garante que duas rodadas nunca se sobreponham.
-- **Mesma imagem da API** (papel `firms-ingest` no `entrypoint.sh`): uma única cadeia de build, dependências e migrações.
+- **Mesma imagem da API** (papel `ingest` no `entrypoint.sh`): uma única cadeia de build, dependências e migrações.
 - **Idempotência pela chave natural.** `dedup_key` = UUIDv5 de (fonte, satélite, `acq_datetime`, lat/lon arredondados). Reprocessar uma janela grava 0 linhas.
 - **Geografia no banco:**
   - `area_id` e `jurisdiction_id` são preenchidos na ingestão por `ST_Intersects`;
@@ -79,14 +79,22 @@ O que mudou em relação ao plano abaixo:
 | `jurisdictions` | 184 municípios do CE + o polígono da UF (malha IBGE 2022, SIRGAS 2000 → WGS84). Script idempotente `python -m seed.jurisdictions`, que **pode** rodar em staging/production porque são dados oficiais, não demo | Contagem = 184; `ST_IsValid` em todos; reexecução sem duplicar |
 | Papel `firms-ingest` no `entrypoint.sh` | Valida a configuração, espera o banco e executa uma rodada | Teste do contrato de papéis (já existe para `api`/`migrate`) |
 
-### Sprint 1.2 — Ingestão real (P0-04, P0-05)
+### Sprint 1.2 — Ingestão real (P0-04, P0-05) — **entregue em PR**
+
+O que mudou em relação ao plano abaixo:
+- INPE pelo CSV diário de dados abertos, não pelo WFS;
+- recuperação por *lease* no lugar do `pg_try_advisory_lock` global;
+- vínculo entre fontes (`cluster_id`) adiado: os dois registros são preservados;
+- job pronto, mas **não ligado** (precisa de autorização);
+- FIRMS validada só com fixtures (sem chave real).
+
 
 | Entrega | Detalhe | Aceite |
 |---|---|---|
 | Rodada FIRMS | Fontes VIIRS SNPP/NOAA-20/NOAA-21 NRT e MODIS NRT. Janela de 1 dia com sobreposição. Bbox do CE. Validação de CSV existente. Status `ok/partial/unavailable/disabled` em `ingestion_runs` | CSV fixo grava N; reexecução grava 0; falha HTTP → `unavailable` sem a chave em lugar nenhum; `records_inserted` = `count(*)` |
 | Rodada INPE | Cliente WFS (rebase do PR #2 **sem** o agregador com fallback demo); `source=INPE_QUEIMADAS`; atribuição e termos documentados | Amostra WFS gravada nos testes; PR #2 fechado com referência |
 | Vínculo entre fontes | Mesmo foco (≤ 375 m, ±30 min) mantém os dois registros, ligados por `cluster_id`. Nenhum registro é apagado | Teste com par FIRMS × INPE |
-| Ligar o job em **staging** | `ENABLE_FIRMS_INGEST_JOB=true` → contrato do IaC atualizado (o check passa a exigir o serviço) → `railway config plan/apply` em staging | 48 h de execuções em staging sem `error`; `ingestion_runs` coerentes |
+| Ligar o job em **staging** | `ENABLE_ORBITAL_INGEST_JOB=true` → contrato do IaC atualizado (o check passa a exigir o serviço) → `railway config plan/apply` em staging | 48 h de execuções em staging sem `error`; `ingestion_runs` coerentes |
 | `POST /orbital-alerts/ingest` | Dispara uma rodada (admin, auditado) e devolve o `ingestion_run` | 401/403 para não-admin; auditoria registrada |
 
 ### Sprint 1.3 — Leitura e mapa do Ceará (P0-06, P0-07, P1-09)

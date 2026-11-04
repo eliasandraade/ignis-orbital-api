@@ -10,7 +10,14 @@ import { readFileSync } from "node:fs";
 import { createRailwayContext, project } from "railway/iac";
 import type { ResourceNode, ServiceNode } from "railway/iac";
 
-import program, { BRANCHES, POSTGIS_IMAGE, environmentOf } from "./railway.ts";
+import program, {
+  BRANCHES,
+  ENABLE_ORBITAL_INGEST_JOB,
+  INGEST_CRON,
+  POSTGIS_IMAGE,
+  environmentOf,
+  ingestJob,
+} from "./railway.ts";
 
 const root = new URL("../", import.meta.url);
 const entrypoint = readFileSync(new URL("scripts/entrypoint.sh", root), "utf8");
@@ -52,7 +59,8 @@ for (const env of ["staging", "production"] as const) {
   const web = svc(resources, "web");
   const postgis = svc(resources, "postgis");
 
-  check(`${env}: only api, web, postgis and its volume (Phase 1 job off)`, () => {
+  check(`${env}: only api, web, postgis and its volume (ingestion job off)`, () => {
+    assert.equal(ENABLE_ORBITAL_INGEST_JOB, false, "ingestion job needs owner authorisation");
     assert.deepEqual(resources.map((r) => r.address).sort(), [
       "service.api",
       "service.postgis",
@@ -129,6 +137,21 @@ for (const env of ["staging", "production"] as const) {
   check(`${env}: client IP comes from Railway's X-Real-IP`, () => {
     assert.equal(literal(api, "TRUST_PROXY_HEADERS"), "true");
     assert.equal(literal(api, "CLIENT_IP_HEADER"), "x-real-ip");
+  });
+
+  check(`${env}: ingestion job (ready, off) runs one round per cron tick`, () => {
+    const job = ingestJob(env, BRANCHES[env].api, "postgresql://contract-check");
+    assert.equal(job.deploy?.startCommand, "/app/scripts/entrypoint.sh ingest");
+    assert.match(entrypoint, /^\s+ingest\)$/m);
+    assert.equal(job.deploy?.cronSchedule, INGEST_CRON);
+    assert.equal(INGEST_CRON, "*/15 * * * *");
+    assert.equal(job.deploy?.restartPolicyType, "NEVER");
+    assert.equal(job.source?.checkSuites, true);
+    assert.equal(job.source?.branch, BRANCHES[env].api);
+    assert.equal(literal(job, "APP_ENV"), env);
+    assert.equal(literal(job, "MIGRATE_ON_START"), "false");
+    preserved(job, "NASA_FIRMS_MAP_KEY");
+    preserved(job, "JWT_SECRET_KEY");
   });
 }
 

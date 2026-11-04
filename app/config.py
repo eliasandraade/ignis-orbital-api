@@ -136,6 +136,20 @@ class Settings(BaseSettings):
     external_api_timeout_seconds: int = 10
     external_api_cache_ttl_minutes: int = 60
 
+    # Orbital ingestion (app/orbital): scheduled worker and admin trigger.
+    inpe_queimadas_enabled: bool = True
+    inpe_queimadas_base_url: str = (
+        "https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil"
+    )
+    # One day plus overlap with the previous round; dedup makes overlap free.
+    ingest_window_hours: int = Field(default=26, ge=1, le=72)
+    ingest_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    ingest_http_attempts: int = Field(default=3, ge=1, le=10)
+    ingest_min_request_interval_seconds: float = Field(default=1.0, ge=0, le=60)
+    ingest_product_timeout_seconds: float = Field(default=300.0, ge=5, le=3600)
+    # Below the 15-minute schedule, so a slow round ends before the next one.
+    ingest_round_timeout_seconds: float = Field(default=780.0, ge=10, le=3600)
+
     # NoDecode: without it pydantic-settings JSON-decodes the env value before the
     # validator runs, so the documented comma-separated format crashed at boot.
     # Local development only; operational environments must set CORS_ORIGINS to

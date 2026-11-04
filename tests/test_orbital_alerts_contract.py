@@ -238,51 +238,21 @@ async def test_ingest_forbidden_below_admin(client, as_role, role):
     assert response.status_code == 403
 
 
-# --- POST /ingest results ----------------------------------------------------------
+@pytest.mark.parametrize("path", ["/ingestion-runs", f"/ingestion-runs/{uuid.uuid4()}"])
+async def test_ingestion_runs_are_admin_only(client, as_role, path):
+    assert (await client.get(f"/api/v1/orbital-alerts{path}")).status_code in (401, 403)
+    as_role("gestor")
+    assert (await client.get(f"/api/v1/orbital-alerts{path}")).status_code == 403
 
 
-async def test_ingest_without_key_reports_disabled_and_audits(client, as_role):
-    session = as_role("admin")
-    data = (await client.post("/api/v1/orbital-alerts/ingest")).json()
-    assert data["status"] == "disabled_missing_api_key"
-    assert data["records_inserted"] == 0
-    assert data["persisted"] is False
-    audit = session.add.call_args.args[0]
-    assert audit.action == "orbital_alerts.ingest_triggered"
-    assert audit.metadata_json["status"] == "disabled_missing_api_key"
-    session.commit.assert_awaited()
+async def test_public_read_never_starts_an_ingestion_run(client, monkeypatch):
+    from app.integrations import orbital_alerts_router as router
 
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("GET /orbital-alerts não pode iniciar ingestão")
 
-async def test_ingest_never_claims_persistence(client, as_role, firms_key, fake_firms):
-    as_role("admin")
-    data = (await client.post("/api/v1/orbital-alerts/ingest")).json()
-    assert data["status"] == "processed_not_persisted"
-    assert data["records_fetched"] == 4
-    assert data["records_valid"] == 2
-    assert data["records_inserted"] == 0
-    assert data["records_skipped"] == 2
-    assert data["persisted"] is False
-    assert "Nenhum registro foi gravado" in data["message"]
-
-
-async def test_ingest_refreshes_cache_for_list(client, as_role, firms_key, fake_firms):
-    as_role("admin")
-    await client.post("/api/v1/orbital-alerts/ingest")
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "cached"
-    assert fake_firms["calls"] == 1
-
-
-async def test_ingest_upstream_failure_is_unavailable_without_leaking_key(
-    client, as_role, firms_key, fake_firms
-):
-    as_role("admin")
-    fake_firms["exc"] = _http_error(403)
-    response = await client.post("/api/v1/orbital-alerts/ingest")
-    data = response.json()
-    assert data["status"] == "unavailable"
-    assert data["records_inserted"] == 0
-    assert FAKE_KEY not in response.text
+    monkeypatch.setattr(router, "IngestionRound", _forbidden)
+    assert (await client.get("/api/v1/orbital-alerts")).status_code == 200
 
 
 # --- parsing ---------------------------------------------------------------------

@@ -44,25 +44,6 @@ class OrbitalAlertListResponse(BaseModel):
     disclaimer: str = THERMAL_ANOMALY_DISCLAIMER
 
 
-class IngestResponse(BaseModel):
-    # processed_not_persisted: dados obtidos e validados, mas NÃO gravados em banco.
-    status: Literal[
-        "ok",
-        "partial",
-        "processed_not_persisted",
-        "disabled_missing_api_key",
-        "unavailable",
-        "error",
-    ]
-    message: str
-    records_fetched: int = 0
-    records_valid: int = 0
-    # Registros efetivamente gravados em banco. Sempre 0 até existir persistência.
-    records_inserted: int = 0
-    records_skipped: int = 0
-    persisted: bool = False
-
-
 class ConvertToIncidentRequest(BaseModel):
     priority: Literal["alta", "media", "baixa"] = "media"
     notes: str = ""

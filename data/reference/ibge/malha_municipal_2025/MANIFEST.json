@@ -8,7 +8,14 @@
   "source_crs": "EPSG:4674",
   "target_crs": "EPSG:4326",
   "documentation_url": "https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais/15774-malhas.html",
-  "license_note": "Arquivos públicos do IBGE. Uso condicionado à Nota Metodológica 'Malha Municipal Digital e Áreas Territoriais 2025: informações técnicas e legais para a utilização dos dados publicados'. A malha tem finalidade estatística: o IBGE não define nem demarca limites legais.",
+  "methodology_note": {
+    "ibge_library_id": "2102268",
+    "title": "Malha Municipal Digital e Áreas Territoriais 2025: nota metodológica 01/2026 — Informações técnicas e legais para a utilização dos dados publicados",
+    "url": "https://biblioteca.ibge.gov.br/visualizacao/livros/liv102268.pdf",
+    "sha256": "bc88c44624c8852b4796b72b525f9092cd770415403c1a3486a8d48bcefc9e89",
+    "verified_at": "2026-11-04"
+  },
+  "license_note": "Arquivos públicos do IBGE. Uso condicionado à Nota Metodológica 01/2026 (Biblioteca do IBGE, id 2102268) 'Malha Municipal Digital e Áreas Territoriais 2025: informações técnicas e legais para a utilização dos dados publicados'. A malha tem finalidade estatística: o IBGE não define nem demarca limites legais.",
   "state": {
     "ibge_code": "23",
     "abbreviation": "CE",
