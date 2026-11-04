@@ -8,6 +8,7 @@ cockpit metrics checked against SQL, RBAC matrix and API docs exposure.
 import asyncio
 import csv
 import io
+import secrets
 import uuid
 
 import pytest
@@ -21,8 +22,10 @@ from app.database import get_db
 from app.main import app
 from app.users.model import User
 
-PASSWORD = "senha-de-teste-longa-1"
-NEW_PASSWORD = "outra-senha-de-teste-2"
+# Generated per run: no credential-like literal lives in the repository.
+PASSWORD = secrets.token_urlsafe(18)
+NEW_PASSWORD = secrets.token_urlsafe(18)
+WRONG_PASSWORD = secrets.token_urlsafe(18)
 REASON = "rotina de teste automatizado"
 
 
@@ -152,7 +155,7 @@ async def test_forced_password_change_gates_the_api_and_rotates_the_session(admi
 
     wrong = await client.post(
         "/api/v1/auth/change-password",
-        json={"current_password": "errada-errada-1", "new_password": NEW_PASSWORD},
+        json={"current_password": WRONG_PASSWORD, "new_password": NEW_PASSWORD},
         headers=first,
     )
     assert wrong.status_code == 403
@@ -194,7 +197,7 @@ async def test_role_change_requires_step_up_and_revokes_sessions(admin_db, clien
     url = f"/api/v1/admin/users/{target.id}/role"
 
     denied = await client.post(
-        url, json={**_guard(1, "senha-errada-123"), "role": "gestor"}, headers=_auth(admin)
+        url, json={**_guard(1, WRONG_PASSWORD), "role": "gestor"}, headers=_auth(admin)
     )
     assert denied.status_code == 403
     assert (await _fresh(client, admin, target.id))["role"] == "campo"
