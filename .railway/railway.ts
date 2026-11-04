@@ -19,7 +19,7 @@
  * Read-only preview:  cd .railway && npm ci && railway link && railway config plan
  */
 import { defineRailway, github, image, preserve, service, volume } from "railway/iac";
-import type { ResourceNode } from "railway/iac";
+import type { ResourceNode, ServiceNode, VariableValue } from "railway/iac";
 
 export type IgnisEnvironment = "staging" | "production";
 
@@ -38,11 +38,13 @@ export const BRANCHES: Record<IgnisEnvironment, { api: string; web: string }> = 
 export const POSTGIS_IMAGE = "postgis/postgis:16-3.4";
 
 /**
- * Phase 1 (docs/IGNIS/PHASE-1-BACKLOG.md): scheduled FIRMS ingestion. Stays
- * off until the job exists in the API image; a cron service pointing to a
- * missing command would fail every 15 minutes.
+ * Scheduled orbital ingestion (NASA FIRMS + INPE), entrypoint role `ingest`.
+ * The job exists in the API image since Sprint 1.2 but stays OFF until the
+ * owner authorises homologation (docs/IGNIS/SPRINT-1.2-DELIVERY.md): turning
+ * it on is this flag plus `railway config plan/apply` in staging first.
  */
-export const ENABLE_FIRMS_INGEST_JOB = false;
+export const ENABLE_ORBITAL_INGEST_JOB = false;
+export const INGEST_CRON = "*/15 * * * *";
 
 export function environmentOf(name: string | undefined): IgnisEnvironment {
   if (name === "production") return "production";
@@ -140,29 +142,41 @@ export default defineRailway((ctx, project) => {
 
   const resources: ResourceNode[] = [pgData, postgis, api, web];
 
-  if (ENABLE_FIRMS_INGEST_JOB) {
-    resources.push(
-      service("firms-ingest", {
-        source: github(REPOSITORIES.api, { branch: branch.api, checkSuites: true }),
-        build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
-        deploy: {
-          startCommand: "/app/scripts/entrypoint.sh firms-ingest",
-          // FIRMS NRT updates roughly every 3 h per satellite; 15 min keeps latency low
-          // while the job itself skips windows it already persisted.
-          cronSchedule: "*/15 * * * *",
-          restartPolicyType: "NEVER",
-        },
-        env: {
-          APP_ENV: env,
-          DATABASE_URL: postgis.env.DATABASE_URL,
-          JWT_SECRET_KEY: preserve(),
-          NASA_FIRMS_MAP_KEY: preserve(),
-          CORS_ORIGINS: "https://${{web.RAILWAY_PUBLIC_DOMAIN}}",
-          MIGRATE_ON_START: "false",
-        },
-      }),
-    );
+  if (ENABLE_ORBITAL_INGEST_JOB) {
+    resources.push(ingestJob(env, branch.api, postgis.env.DATABASE_URL));
   }
 
   return project("ignis", { environments: ["staging", "production"], resources });
 });
+
+/**
+ * The cron service, built from the API image. Exported so the contract check
+ * can verify it while the flag is still off.
+ */
+export function ingestJob(
+  env: IgnisEnvironment,
+  apiBranch: string,
+  databaseUrl: string | VariableValue,
+): ServiceNode {
+  return service("orbital-ingest", {
+    source: github(REPOSITORIES.api, { branch: apiBranch, checkSuites: true }),
+    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
+    deploy: {
+      startCommand: "/app/scripts/entrypoint.sh ingest",
+      // One round per execution; each round re-reads the last 26 h, and
+      // deduplication makes the overlap free. A round times out at 13 min.
+      cronSchedule: INGEST_CRON,
+      restartPolicyType: "NEVER",
+    },
+    env: {
+      APP_ENV: env,
+      DATABASE_URL: databaseUrl,
+      JWT_SECRET_KEY: preserve(),
+      // Distinct key per environment: FIRMS quotas are per key.
+      NASA_FIRMS_MAP_KEY: preserve(),
+      INPE_QUEIMADAS_ENABLED: "true",
+      CORS_ORIGINS: "https://${{web.RAILWAY_PUBLIC_DOMAIN}}",
+      MIGRATE_ON_START: "false",
+    },
+  });
+}
