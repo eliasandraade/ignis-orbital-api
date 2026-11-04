@@ -21,6 +21,7 @@ O inventário de telas fica no repositório do frontend.
 | 13 | [RAILWAY-DEPLOYMENT.md](RAILWAY-DEPLOYMENT.md) | backend | **Plano de implantação Railway-only**: ambientes, serviços, segredos, deploy condicionado à CI, rollback, evidências |
 | 14 | [HOMOLOGATION-CHECKLIST.md](HOMOLOGATION-CHECKLIST.md) | backend | Checklist de homologação (staging → production) |
 | 15 | [PHASE-1-EXECUTION-PLAN.md](PHASE-1-EXECUTION-PLAN.md) | backend | Plano de execução da Fase 1: INPE/FIRMS, PostGIS, mapa do Ceará |
+| 16 | [SPRINT-1.1-DELIVERY.md](SPRINT-1.1-DELIVERY.md) | backend | Sprint 1.1: tabelas geoespaciais, malha oficial IBGE 2025 do Ceará, contratos de ingestão, evidências |
 
 ## Repositórios
 

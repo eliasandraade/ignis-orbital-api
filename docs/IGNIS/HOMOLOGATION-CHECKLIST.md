@@ -28,6 +28,8 @@ Variáveis usadas nos comandos: `API=https://<dominio-api>` e `WEB=https://<domi
 | H-12 | IP do cliente | 12 logins inválidos seguidos da mesma máquina; depois 1 de outra rede (ex.: 4G) | A 1ª máquina recebe `429`; a outra não. Se todas forem bloqueadas juntas, o `X-Real-IP` não traz o IP do cliente: abrir chamado no Railway e voltar `TRUST_PROXY_HEADERS=false` |
 | H-13 | Sem contas demo | `railway ssh --service api` → `python -m seed.demo_users check` | exit 0 |
 | H-14 | Primeiro admin | `python -m seed.bootstrap_admin …` (senha no prompt) | Admin criado; auditoria `user.bootstrap_admin_created` |
+| H-25 | Jurisdições oficiais | Log do pre-deploy; `railway ssh --service api` → `python -m seed.jurisdictions` | Pre-deploy contém "Jurisdições IBGE: 184 municípios"; a reexecução manual mostra `inseridas 0, atualizadas 0, sem alteração 185` |
+| H-26 | Malha íntegra na imagem | `railway ssh --service api` → `python -m seed.jurisdictions --verify-files` | "Arquivos conferem" (SHA-256 do conjunto `b12b2f26…a4eff`) |
 
 ## C. Deploy condicionado à CI
 

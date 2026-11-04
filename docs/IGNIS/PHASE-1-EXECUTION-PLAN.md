@@ -1,6 +1,6 @@
 # IGNIS — Plano de execução da Fase 1: dados reais do Ceará
 
-Data: 03/11/2026. **Status: plano.** A Fase 1 não foi iniciada.
+Data: 03/11/2026. **Status:** Sprint 1.1 entregue em PR (sem merge); ver [SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md). As Sprints 1.2 a 1.4 não foram iniciadas.
 O plano detalha **como** executar o [PHASE-1-BACKLOG](PHASE-1-BACKLOG.md) na plataforma Railway ([RAILWAY-DEPLOYMENT](RAILWAY-DEPLOYMENT.md)). Os IDs `P0-xx`/`P1-xx` são os do backlog.
 
 ## 1. Objetivo e resultado esperado
@@ -66,7 +66,12 @@ Decisões de desenho:
 
 Cada sprint termina com CI verde, deploy em **staging** pelo fluxo normal, os itens correspondentes do HOMOLOGATION-CHECKLIST e um relatório de entrega. Produção só recebe código com a promoção aprovada pelo proprietário.
 
-### Sprint 1.1 — Fundação de dados (P0-03, P1-02, P1-06 parcial)
+### Sprint 1.1 — Fundação de dados (P0-03, P1-02, P1-06 parcial) — **entregue em PR**
+
+O que mudou em relação ao plano abaixo:
+- malha **IBGE 2025** (referência 30/04/2025) em vez de 2022 (decisão S1.1-D1);
+- o papel `firms-ingest` passou para a Sprint 1.2, porque os workers estão fora do escopo autorizado;
+- `area_id` (UC) foi adiado até existir base oficial de UCs (S1.1-P2).
 
 | Entrega | Detalhe | Aceite |
 |---|---|---|
