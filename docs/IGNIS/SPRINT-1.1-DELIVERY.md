@@ -15,7 +15,7 @@ Escopo autorizado pelo proprietário: tabelas, malha oficial do IBGE, importador
 | Importação automática no pre-deploy (papel `migrate`) | `scripts/entrypoint.sh` |
 | Contratos para os provedores FIRMS/INPE | `app/orbital/contracts.py` |
 | Único caminho de escrita de detecções e execuções | `app/orbital/repository.py` |
-| Testes: 29 unitários + 33 de integração com PostGIS real | `tests/test_geo_foundation_unit.py`, `tests/test_postgis_geo_foundation.py` |
+| Testes: 29 unitários + 33 de integração com PostGIS real (311 na suíte toda) | `tests/test_geo_foundation_unit.py`, `tests/test_postgis_geo_foundation.py` |
 | CI: PostGIS no job de cobertura; importação e contagem no job de migrations; malha conferida dentro da imagem | `.github/workflows/ci.yml` |
 
 ## 2. Fonte oficial
@@ -143,7 +143,9 @@ Foco de calor, não incêndio confirmado.
 | Ponto da Praça do Ferreira | Fortaleza (2304400); Teresina-PI → nenhum município |
 | Imagem Docker: `seed.jurisdictions --verify-files` | arquivos conferem (SHA-256 do conjunto `b12b2f26…a4eff`) |
 | Imagem Docker: papel `migrate` com `APP_ENV=staging`, 2× | 1ª: `inseridas 185`; 2ª: `sem alteração 185`; `alembic_version = a013` |
-| Suíte completa com cobertura | ver relatório do PR (CI) |
+| Suíte completa local (com PostGIS) | 311 testes passando; cobertura 81,8% (módulos novos: 98%) |
+| CI do PR, run `41760828977` (commit `db8c4d6`) | todos os checks verdes: Ruff, Pytest (311 passando, 0 *skip*, cobertura 81,75%), Migrations (`a013 (head)`; 1ª importação `inseridas 185`, 2ª `sem alteração 185`; `{'municipality': 184, 'state': 1}`), Docker (malha conferida na imagem), IaC, pip-audit, lockfile, GitGuardian e SonarCloud (Quality Gate OK, 0 issues abertas) |
+| 1ª execução do Sonar no PR | Quality Gate **falhou** (confiabilidade C, por uma asserção que comparava a mesma expressão) e acusou 16 *code smells*. Todos foram corrigidos em `db8c4d6`, sem mudar o comportamento |
 
 ## 6. Pendências
 
