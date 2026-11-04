@@ -93,7 +93,9 @@ Em todos os endpoints de domínio, o banco de demonstração contém dados do **
 | GET | `/api/v1/environment/weather-risk?lat&lng` | — | Externo (Open-Meteo) | `source_status ∈ live, cached, unavailable`; cache 60 min por processo. **Rate limit 60/min/IP** |
 | GET | `/api/v1/geocoding/reverse?lat&lng` | — | Externo (Nominatim) | Cache por grade de cerca de 111 m. **Rate limit 30/min/IP**. Sem consumidor na UI |
 | GET | `/api/v1/orbital-alerts` | — | Externo (NASA FIRMS) | Contrato abaixo. **Rate limit 60/min/IP** |
-| POST | `/api/v1/orbital-alerts/ingest` | **admin** (Sprint 0) | Parcial | Atualiza o cache; **não persiste** |
+| POST | `/api/v1/orbital-alerts/ingest` | **admin** | Real (Sprint 1.2) | **202** com as execuções criadas; processamento em segundo plano |
+| GET | `/api/v1/orbital-alerts/ingestion-runs` | **admin** | Real (Sprint 1.2) | Últimas execuções (`limit` ≤ 100) |
+| GET | `/api/v1/orbital-alerts/ingestion-runs/{run_id}` | **admin** | Real (Sprint 1.2) | Estado verificável de uma execução; 404 se não existe |
 
 ### Contrato `GET /api/v1/orbital-alerts` (Sprint 0)
 
@@ -122,20 +124,15 @@ Em todos os endpoints de domínio, o banco de demonstração contém dados do **
 
 `OrbitalAlert` ganhou `is_demo: bool`. O `id` agora é determinístico (UUIDv5 de lat, lng, data, hora e satélite).
 
-### Contrato `POST /api/v1/orbital-alerts/ingest` (Sprint 0)
+### Contrato `POST /api/v1/orbital-alerts/ingest` (Sprint 1.2)
 
-| `status` | Quando | `records_inserted` |
-|---|---|---|
-| `processed_not_persisted` | NASA respondeu; focos validados e mantidos em cache | **0** (o número real vai em `records_valid`) |
-| `disabled_missing_api_key` | Sem chave | 0 |
-| `unavailable` | Falha da NASA | 0 |
+Corpo opcional: `{"sources": ["firms", "inpe"]}`. Por padrão, as duas fontes.
 
-Campos novos: `records_valid` e `persisted` (sempre `false`). Toda chamada grava `orbital_alerts.ingest_triggered` em `audit_logs`.
+| Campo | Significado |
+|---|---|
+| `status` | `accepted` quando ao menos uma execução foi criada; `nothing_started` quando todos os produtos já estão rodando em outro processo |
+| `round_id` | Id da rodada. Também fica em `ingestion_runs.params.round_id` e no `entity_id` da auditoria |
+| `runs[]` | `run_id`, `source`, `product`, `status` (`running` ou `skipped_active`). O `run_id` já existe em `ingestion_runs` quando a resposta chega |
+| `message` | Diz que nenhum resultado é afirmado e aponta para a consulta do estado |
 
-**Compatibilidade.** Os campos novos são aditivos. Os valores novos de enum são `demo` e `processed_not_persisted`. O frontend da Sprint 0 os trata. Consumidores antigos que só verificavam `disabled_missing_api_key` passam a ver lista vazia em vez dos 3 itens demo, que é o comportamento correto.
-
-## Erros
-
-- Formato padrão do FastAPI: `{"detail": "<mensagem>"}`. Em 422, `detail` é uma lista de objetos de validação.
-- 401 inclui `WWW-Authenticate: Bearer`. 429 inclui `Retry-After`.
-- Proposta da Fase 4: padronizar o formato de erro com `code` (alinhado ao OrkenGov, ver ORKENGOV-INTEGRATION §6).
+O resultado (`ok`, `partial`, `unavailable`, `disabled`, `error` e os contadores) só pode ser lido em `GET /ingestion-runs/{run_id}`. A ação é auditada como `orbital_ingest.requested`, com o `user_id` do solicitante. O contrato da Sprint 0 (`processed_not_persisted`, cache em memória) foi removido.

@@ -37,8 +37,8 @@ Data: 03/11/2026. Classificação de cada informação que o IGNIS exibe ou pode
 
 | Fonte | Uso previsto | Fase | Observações |
 |---|---|---|---|
-| NASA FIRMS (VIIRS NOAA-20/21, MODIS) | Ampliar a cobertura de satélites | 1 | Mesma chave; deduplicação espacial e temporal entre sensores |
-| **INPE — Programa Queimadas** (TerraBrasilis WFS `ams1h:active-fire-today` / BDQueimadas) | Focos oficiais brasileiros | 1 | Pública, sem chave. Cliente pronto no PR #2 (rebasear, X-05). Confirmar termos de uso e atribuição |
+| NASA FIRMS, API de área: `VIIRS_SNPP_NRT`, `VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT`, `MODIS_NRT` | Focos por satélite, com FRP e confiança por sensor | 1 | **Integrado na Sprint 1.2** (`app/orbital/providers/firms.py`). Exige `NASA_FIRMS_MAP_KEY`; sem a chave, `disabled`. **Validado só com fixtures e resposta real de chave inválida**, nunca com chave real |
+| **INPE — Programa Queimadas**: CSV diário de dados abertos (`dataserver-coids.inpe.br/.../focos/csv/diario/Brasil`) | Focos oficiais brasileiros | 1 | **Integrado na Sprint 1.2** (`app/orbital/providers/inpe.py`). Pública, sem chave, com ETag. O WFS foi preterido porque a camada do PR #2 deixou de existir (SPRINT-1.2-DELIVERY §2.2). Termos de uso e atribuição ainda não confirmados |
 | Open-Meteo histórico / previsão | Correlação meteorológica e previsão de risco | 1–2 | |
 | INMET (estações) | Validação meteorológica oficial | 2 | Avaliar API e licenciamento |
 | FUNCEME (Ceará) | Dados meteorológicos estaduais | 2 | Depende de parceria |

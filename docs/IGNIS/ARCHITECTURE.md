@@ -108,6 +108,22 @@ Princípios:
 5. **Ações operacionais** passam por máquina de estados, motivo obrigatório, papel mínimo e auditoria append-only. Ações com efeito externo só existem com integração oficial e flag por organização.
 6. **Um build por modo.** O modo demonstrativo vira um ambiente separado (`demo.`), com banco de seed. O build operacional não contém mocks.
 
+## 3.1 Ingestão orbital implementada (Sprint 1.2)
+
+```mermaid
+flowchart LR
+  CRON["orbital-ingest (cron */15, desligado)<br/>ou POST /ingest (admin, 202)"] --> ROUND["IngestionRound<br/>1 conexão dedicada · lease por execução"]
+  ROUND -->|"HTTP sem transação aberta"| FIRMS["NASA FIRMS API de área<br/>VIIRS SNPP/N20/N21 NRT · MODIS NRT"]
+  ROUND -->|"HTTP + ETag"| INPE["INPE CSV diário<br/>dados abertos"]
+  ROUND -->|"transações curtas"| REPO["repository.persist_batch<br/>ON CONFLICT · ordem de dedup_key"]
+  REPO --> PG[("orbital_detections · ingestion_runs<br/>jurisdictions (IBGE 2025)")]
+```
+
+- **Camada de gravação:** `app/orbital/repository.py` é a única. O município vem do polígono oficial no `INSERT`; pontos fora do Ceará só entram nos contadores.
+- **Liveness:** é o *lease* (advisory lock de sessão por execução). Uma execução viva nunca é dada como abandonada; a de um processo morto é recuperada na rodada seguinte.
+- **Leitura pública:** `GET /orbital-alerts` não dispara ingestão. Ainda lê a FIRMS com cache e passa a ler o banco na Sprint 1.3.
+- Detalhes: [SPRINT-1.2-DELIVERY](SPRINT-1.2-DELIVERY.md).
+
 ## 4. Mapa geográfico — recomendação para a Fase 1
 
 **Situação atual** (verificada no código):

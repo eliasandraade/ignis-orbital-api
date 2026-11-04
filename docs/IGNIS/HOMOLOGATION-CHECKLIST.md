@@ -29,6 +29,11 @@ Variáveis usadas nos comandos: `API=https://<dominio-api>` e `WEB=https://<domi
 | H-13 | Sem contas demo | `railway ssh --service api` → `python -m seed.demo_users check` | exit 0 |
 | H-14 | Primeiro admin | `python -m seed.bootstrap_admin …` (senha no prompt) | Admin criado; auditoria `user.bootstrap_admin_created` |
 | H-25 | Jurisdições oficiais | Log do pre-deploy; `railway ssh --service api` → `python -m seed.jurisdictions` | Pre-deploy contém "Jurisdições IBGE: 184 municípios"; a reexecução manual mostra `inseridas 0, atualizadas 0, sem alteração 185` |
+| H-27 | FIRMS com chave real (staging) | `railway ssh --service api` → `python -m app.orbital.worker --window-hours 26` | exit 0; 5 execuções `ok`; `records_inserted > 0` na FIRMS; a chave não aparece na saída |
+| H-28 | Reexecução idempotente | Repetir H-27 | `records_inserted = 0` em todas as execuções |
+| H-29 | Ingestão manual auditada | `POST $API/api/v1/orbital-alerts/ingest` com token de admin → `GET …/ingestion-runs/{run_id}` | 202 com `run_id`; estado final na consulta; `audit_logs` com `orbital_ingest.requested` e o `user_id` |
+| H-30 | Job agendado em staging (autorização) | `ENABLE_ORBITAL_INGEST_JOB=true` só em staging → `railway config plan/apply`; observar 48 h | Nenhuma execução `error`; nenhuma `running` com mais de 15 min |
+| H-31 | Recuperação após queda | *Restart* do `orbital-ingest` no meio de uma rodada | A rodada seguinte recupera a execução como `abandoned` e roda normalmente |
 | H-26 | Malha íntegra na imagem | `railway ssh --service api` → `python -m seed.jurisdictions --verify-files` | "Arquivos conferem" (SHA-256 do conjunto `b12b2f26…a4eff`) |
 
 ## C. Deploy condicionado à CI

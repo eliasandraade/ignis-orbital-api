@@ -65,7 +65,7 @@ Proteções no código contra misturar ambientes:
 | `postgis` | imagem `postgis/postgis:16-3.4` (a mesma da CI e do compose) | — | padrão da imagem | — | — | 1, volume em `/var/lib/postgresql/data` |
 | `api` | `ignis-orbital-api` | `Dockerfile` (lock com hashes, só wheels, usuário não-root, código somente leitura) | `/app/scripts/entrypoint.sh api` | `/app/scripts/entrypoint.sh migrate` (timeout 600 s) | `/ready` (verifica o banco), 120 s | 1 (ver §12) |
 | `web` | `ignis-fire-watch` | `Dockerfile` (Node 22 → nginx-unprivileged 1.28, imagens fixadas por digest) | padrão da imagem | — | `/healthz`, 30 s | 1 |
-| `firms-ingest` | `ignis-orbital-api` | `Dockerfile` | job da Fase 1 | — | — | cron `*/15 * * * *`, **desligado** (`ENABLE_FIRMS_INGEST_JOB=false`) |
+| `orbital-ingest` | `ignis-orbital-api` | `Dockerfile` | ingestão NASA FIRMS + INPE (Sprint 1.2), papel `ingest` | — | — | cron `*/15 * * * *`, `restartPolicyType NEVER`, **desligado** (`ENABLE_ORBITAL_INGEST_JOB = false`) até a autorização de homologação |
 
 O banco **não tem domínio público nem TCP proxy**. Só os serviços do mesmo ambiente o alcançam, pela rede privada (`postgis.railway.internal`). A administração é feita por `railway ssh` no serviço `api`, nunca por porta exposta.
 
@@ -247,11 +247,11 @@ curl -sI $WEB/gestor/war-room | grep -i '^content-security-policy'   # connect-s
 ## 12. Workers futuros (Fase 1)
 
 - **Ingestão FIRMS como job agendado do Railway:**
-  - um serviço `firms-ingest`, construído com a mesma imagem da API;
+  - um serviço `orbital-ingest`, construído com a mesma imagem da API;
   - `cronSchedule */15 * * * *` e `restartPolicy NEVER`;
-  - já declarado em `railway.ts` atrás de `ENABLE_FIRMS_INGEST_JOB`.
+  - declarado em `railway.ts` (`ingestJob()`) atrás de `ENABLE_ORBITAL_INGEST_JOB`.
 
-  Ligar só quando o papel `firms-ingest` existir no `entrypoint.sh` e estiver coberto por testes.
+  O papel `ingest` existe e está coberto por testes desde a Sprint 1.2. Ligar só com autorização, primeiro em staging (SPRINT-1.2-DELIVERY §10).
 - **Requisitos do job:**
   - idempotência por chave natural (satélite, data/hora de aquisição, lat/lon);
   - `pg_advisory_lock`, para que duas execuções não se sobreponham;

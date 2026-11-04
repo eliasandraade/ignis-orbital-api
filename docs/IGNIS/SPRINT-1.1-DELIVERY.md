@@ -124,7 +124,7 @@ Foco de calor, não incêndio confirmado.
   - `DetectionProvider.fetch(product, window, bbox) → ProviderResult`;
   - `NormalizedDetection` valida fuso, faixas e enums;
   - um resultado sem sucesso não pode carregar detecções;
-  - o `firms-ingest` (papel no entrypoint e o job do Railway) fica para a Sprint 1.2.
+  - o worker (papel `ingest` no entrypoint e o job `orbital-ingest` do Railway) foi entregue na Sprint 1.2.
 - **Ambientes:** `python -m seed.jurisdictions` roda em **todos** os ambientes, staging e production inclusive. São dados oficiais, ao contrário do seed demo, que continua bloqueado. Ele roda no pre-deploy logo após `alembic upgrade head`.
 
 ## 5. Evidências
@@ -153,6 +153,6 @@ Foco de calor, não incêndio confirmado.
 |---|---|---|
 | S1.1-P1 | `alembic check` global falha por **deriva anterior a esta sprint**: modelos antigos com `DateTime` sem fuso × migrations `timezone=True`; índices GiST antigos fora dos modelos; tabelas do schema `tiger`. A verificação desta sprint é restrita às 4 tabelas novas. Corrigir a deriva antiga é uma tarefa própria (B-13) | Backlog |
 | S1.1-P2 | Base oficial de unidades de conservação (CNUC/ICMBio, SEMA-CE) para preencher o vínculo foco → UC | Fase 1 (antes da Sprint 1.3) |
-| S1.1-P3 | Sprint 1.2: provedores FIRMS/INPE sobre estes contratos, papel `firms-ingest`, job no Railway | Aguarda autorização |
+| S1.1-P3 | Sprint 1.2: provedores FIRMS/INPE sobre estes contratos, papel `ingest`, job no Railway | **Entregue** (SPRINT-1.2-DELIVERY) |
 | S1.1-P4 | Confirmar em staging, após o deploy autorizado, os itens H-25 e H-26 do checklist | Proprietário |
-| S1.1-P5 | Ler a Nota Metodológica da MMD 2025 (biblioteca IBGE, id 2102169) e registrar eventuais restrições adicionais de uso | Proprietário/jurídico |
+| S1.1-P5 | Ler a Nota Metodológica da MMD 2025 (Biblioteca do IBGE, **id 2102268**, nota metodológica 01/2026, `liv102268.pdf`; verificada na Sprint 1.2, ver SPRINT-1.2-DELIVERY §7) e registrar eventuais restrições adicionais de uso | Proprietário/jurídico |
