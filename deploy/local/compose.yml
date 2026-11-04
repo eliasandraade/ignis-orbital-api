@@ -1,0 +1,89 @@
+# IGNIS — isolated local stack for human validation (never a deploy).
+#
+# Use deploy/local/validate.sh: it generates the secrets, builds both images,
+# migrates, imports the official IBGE mesh, creates local accounts, ingests
+# INPE data and checks health. Everything binds to 127.0.0.1 and lives in the
+# "ignis-validation" project (its own network and volume); the database URL
+# is fixed to the service below, so this stack cannot reach any remote base.
+
+name: ignis-validation
+
+x-api-env: &api-env
+  APP_ENV: development
+  DATABASE_URL: postgresql+asyncpg://ignis:${IGNIS_LOCAL_DB_PASSWORD:?run validate.sh}@db:5432/ignis_validation
+  JWT_SECRET_KEY: ${IGNIS_LOCAL_JWT_SECRET:?run validate.sh}
+  CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+  NASA_FIRMS_MAP_KEY: ${NASA_FIRMS_MAP_KEY:-}
+  INPE_QUEIMADAS_ENABLED: "true"
+  SKIP_DEMO_SEED: "true"
+  UVICORN_RELOAD: "false"
+  MIGRATE_ON_START: "false"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ignis
+      POSTGRES_PASSWORD: ${IGNIS_LOCAL_DB_PASSWORD:?run validate.sh}
+      POSTGRES_DB: ignis_validation
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ignis -d ignis_validation"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    build: ../..
+    image: ignis-validation-api
+    environment: *api-env
+    command: ["migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: ignis-validation-api
+    environment: *api-env
+    command: ["api"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # One ingestion round, on demand: `validate.sh ingest` / `ingest-fixture`.
+  ingest:
+    image: ignis-validation-api
+    environment: *api-env
+    command: ["ingest"]
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+    restart: "no"
+
+  web:
+    build:
+      context: ${IGNIS_WEB_DIR:-../../../ignis-fire-watch}
+      args:
+        VITE_USE_API: "true"
+        VITE_API_URL: http://localhost:8000
+    image: ignis-validation-web
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

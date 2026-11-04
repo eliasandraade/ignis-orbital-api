@@ -172,6 +172,8 @@ def test_entrypoint_requires_explicit_app_env_and_skips_seed_safely():
     assert "migrate)" in script
     assert "MIGRATE_ON_START:-true" in script
     assert "SEED_DEMO_DATA" not in script
+    # The local validation stack may skip the demo seed; nothing may force it.
+    assert 'SKIP_DEMO_SEED:-false}" == "true"' in script
 
 
 # --- readiness does not leak driver errors -------------------------------------------
