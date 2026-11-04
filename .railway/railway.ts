@@ -93,7 +93,9 @@ export default defineRailway((ctx, project) => {
   const postgis = service("ignis-postgis", {
     source: image(POSTGIS_IMAGE),
     volumeMounts: { "/var/lib/postgresql/data": pgData },
-    deploy: { region: REGION, restartPolicyType: "ALWAYS" },
+    // Region and replica count (multiRegionConfig); the volume follows the service.
+    replicas: { [REGION]: 1 },
+    deploy: { restartPolicyType: "ALWAYS" },
     env: {
       POSTGRES_USER: "ignis",
       POSTGRES_DB: "ignis",
@@ -124,8 +126,10 @@ export default defineRailway((ctx, project) => {
         "alembic.ini",
       ],
     },
+    // Rate limits and caches are in memory, per process: one replica and one
+    // worker keep them exact (ADMIN-SECURITY-REVIEW §10).
+    replicas: { [REGION]: 1 },
     deploy: {
-      region: REGION,
       startCommand: "/app/scripts/entrypoint.sh api",
       // Once per deploy, before the new version receives traffic; failure aborts
       // the deploy. Concurrent runs serialise on an advisory lock (alembic/env.py).
@@ -136,9 +140,6 @@ export default defineRailway((ctx, project) => {
       healthcheckTimeout: 120,
       restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 5,
-      // Rate limits and caches are in memory, per process: one replica and one
-      // worker keep them exact (ADMIN-SECURITY-REVIEW §10).
-      numReplicas: 1,
     },
     env: {
       APP_ENV: env,
@@ -163,13 +164,12 @@ export default defineRailway((ctx, project) => {
   const web = service("ignis-web", {
     source: github(REPOSITORIES.web, { branch: branch.web, checkSuites: true }),
     build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
+    replicas: { [REGION]: 1 },
     deploy: {
-      region: REGION,
       healthcheckPath: "/healthz",
       healthcheckTimeout: 30,
       restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 5,
-      numReplicas: 1,
     },
     ...(env === "production" ? { domains: [PRODUCTION_DOMAIN] } : {}),
     env: {
@@ -206,8 +206,8 @@ export function ingestJob(
       dockerfilePath: "Dockerfile",
       watchPatterns: ["app/**", "Dockerfile", "requirements.lock"],
     },
+    replicas: { [REGION]: 1 },
     deploy: {
-      region: REGION,
       startCommand: "/app/scripts/entrypoint.sh ingest",
       // One round per execution; each round re-reads the last 26 h, and
       // deduplication makes the overlap free. A round times out at 13 min.

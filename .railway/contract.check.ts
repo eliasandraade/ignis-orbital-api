@@ -95,7 +95,11 @@ for (const env of ["staging", "production"] as const) {
 
   check(`${env}: every service runs in the chosen region`, () => {
     for (const node of services) {
-      assert.equal(node.deploy?.region, REGION, `${node.name} region`);
+      assert.deepEqual(
+        node.deploy?.multiRegionConfig,
+        { [REGION]: { numReplicas: 1 } },
+        `${node.name}: one replica in ${REGION}`,
+      );
     }
   });
 
@@ -170,7 +174,6 @@ for (const env of ["staging", "production"] as const) {
   });
 
   check(`${env}: one replica, one worker (in-memory rate limit stays exact)`, () => {
-    assert.equal(api.deploy?.numReplicas, 1);
     assert.equal(literal(api, "WEB_CONCURRENCY"), "1");
     assert.equal(literal(api, "TRUST_PROXY_HEADERS"), "true");
     assert.equal(literal(api, "CLIENT_IP_HEADER"), "x-real-ip");

@@ -443,3 +443,21 @@ def test_client_ip_x_real_ip_ignored_unless_trusted(monkeypatch):
 def test_client_ip_header_is_a_closed_set():
     with pytest.raises(ValidationError):
         Settings(client_ip_header="x-client-ip", _env_file=None)
+
+
+def test_configuration_errors_never_echo_secrets():
+    """A rejected configuration ends up in deploy logs: no input values in the error."""
+    jwt = secrets.token_hex(32)
+    db_password = secrets.token_hex(16)
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            app_env="staging",
+            jwt_secret_key=jwt,
+            database_url=f"postgresql://ignis:{db_password}@ignis-postgis.railway.internal:5432/ignis",
+            cors_origins="https://",
+        )
+    text = str(exc.value)
+    assert "CORS_ORIGINS" in text
+    assert jwt not in text
+    assert db_password not in text
+    assert "input_value" not in text

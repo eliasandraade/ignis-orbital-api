@@ -93,6 +93,9 @@ class Settings(BaseSettings):
         # .env is shared with docker compose (POSTGRES_*), so unrelated keys
         # must not abort startup. Unknown keys are ignored, never applied.
         extra="ignore",
+        # A validation error must never echo the configuration it rejected: the
+        # input holds DATABASE_URL and JWT_SECRET_KEY and ends up in deploy logs.
+        hide_input_in_errors=True,
     )
 
     app_name: str = "IGNIS Orbital API"
