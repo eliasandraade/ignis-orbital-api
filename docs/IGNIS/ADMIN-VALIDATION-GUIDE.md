@@ -136,3 +136,58 @@ Apontamento de CI: o GitGuardian marcou como "Generic Password" uma senha **de t
 primeiro commit do PR (`tests/test_postgis_admin.py`). As senhas de teste passaram a ser geradas por
 execução (commit seguinte); o incidente já registrado no painel do GitGuardian precisa ser marcado
 pelo proprietário (não há segredo real; o histórico não foi reescrito).
+
+## 5. Staging no Railway (04/11/2026)
+
+Endereço: **https://ignis-web-staging.up.railway.app**. Same-origin: a API responde em `/api/v1`; não
+há domínio público para ela.
+
+**Contas de homologação** (`admin|gestor|campo.homologacao@example.org`):
+- as senhas existem só em `ignis-orbital-api/deploy/local/.staging.env`, ignorado pelo Git, na estação que
+  provisionou;
+- nenhuma conta usa senha publicada nem a mesma senha da pilha local;
+- para entregar acesso a outra pessoa, crie uma conta para ela pelo cockpit (senha provisória + troca
+  obrigatória), em vez de repassar essas.
+
+### Roteiro manual
+
+O mesmo do §2, trocando `http://localhost:8080` pelo endereço acima. Diferenças esperadas no staging:
+- selo **"Homologação"** no cabeçalho do cockpit;
+- **NASA FIRMS** "Não configurada / Não homologada" (sem chave);
+- **INPE** "Operando" com focos reais do dia;
+- **Denúncias:** `/public/report` mostra "O recebimento de denúncias está desativado nesta instalação" e
+  **não** exibe formulário;
+- **Aurora:** não existe (`POST /api/v1/aurora/chat` → 404);
+- **API e diagnóstico:** o link `/docs` não aparece (documentação só pelo explorador autenticado).
+
+### E2E contra o staging
+
+```bash
+cd ignis-fire-watch
+set -a; . ../ignis-orbital-api/deploy/local/.staging.env; set +a
+export IGNIS_WEB_URL=$STAGING_URL IGNIS_API_URL=$STAGING_URL \
+  IGNIS_E2E_EMAIL_ADMIN=$STAGING_ADMIN_EMAIL IGNIS_E2E_PASSWORD_ADMIN=$STAGING_ADMIN_PASSWORD \
+  IGNIS_E2E_EMAIL_GESTOR=$STAGING_GESTOR_EMAIL IGNIS_E2E_PASSWORD_GESTOR=$STAGING_GESTOR_PASSWORD \
+  IGNIS_E2E_EMAIL_CAMPO=$STAGING_CAMPO_EMAIL IGNIS_E2E_PASSWORD_CAMPO=$STAGING_CAMPO_PASSWORD
+npx playwright test
+```
+
+O login tem limite de 10 tentativas por minuto por IP. Não rode duas suítes seguidas sem um intervalo
+de cerca de 1 minuto. Cada execução cria uma conta `e2e.<timestamp>@example.org`, que termina
+desativada.
+
+### Resultados de 04/11/2026
+
+| Verificação | Resultado |
+|---|---|
+| E2E contra o staging, com as rotas de denúncia e aviso novas (web `c0089e4`, API `dc089bd`) | **29/29** (desktop + mobile), nenhum ignorado |
+| E2E contra o staging, versão anterior (web `b6cf4a2`, API `2aed1f3`) | 27/27 |
+| E2E na pilha local | 29/29 |
+| pytest completo (PostGIS real) | 439 passed, 1 skipped, cobertura 88 % |
+| Vitest / typecheck / lint | 56/56 / limpo / 0 erros |
+| IaC (`npm run check`) | 28/28 |
+| CI dos PRs (`staging` = `feat/ignis-admin-cockpit`) | API: todos os jobs verdes. Web: verde após reexecução (a 1ª execução do E2E usou a API anterior ao endpoint `/reports/intake`, corrida entre os dois repositórios) |
+| Rollback do `ignis-web` (`deploymentRollback` para o deploy anterior e de volta) | 8 s para cada lado, com `/healthz` e `/ready` OK durante a troca |
+| Capturas | 16 em `evidence/railway-staging-2026-11-04/` |
+
+Detalhes, IDs e bloqueios: [RAILWAY-PROVISIONING-REPORT.md](RAILWAY-PROVISIONING-REPORT.md).

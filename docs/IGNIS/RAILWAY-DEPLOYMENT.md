@@ -1,128 +1,119 @@
-# IGNIS — Plano de implantação no Railway
+# IGNIS — Implantação no Railway
 
-Data: 03/11/2026. Decisão do proprietário: **o IGNIS é hospedado exclusivamente no Railway**. A Vercel não faz parte da arquitetura.
+Atualizado em 04/11/2026. Decisão do proprietário: **o IGNIS é hospedado exclusivamente no Railway**. A Vercel não faz parte da arquitetura.
 
-> **Este documento é um plano.** Nada foi provisionado nem publicado:
-> - nenhum projeto Railway foi criado;
-> - nenhuma variável ou segredo foi gravado;
-> - nenhum deploy foi feito.
+> **Estado real (04/11/2026):**
+> - O projeto **IGNIS Orbital** existe (`801f5962-4b9a-48dc-a83a-5e8ecb383f81`).
+> - O **staging** está implantado e homologado em `https://ignis-web-staging.up.railway.app`.
+> - A **produção** está provisionada (banco, volume, segredos e domínio anexado), **sem deploy de aplicação**.
 >
-> Os passos de §7 em diante exigem a **autorização do proprietário**. Tudo o que está aqui foi exercitado em ambiente local isolado (§13).
+> Os detalhes, IDs, evidências e bloqueios estão em [RAILWAY-PROVISIONING-REPORT.md](RAILWAY-PROVISIONING-REPORT.md).
 
 ## 1. Visão geral
 
 ```mermaid
 flowchart LR
   subgraph GH["GitHub"]
-    BM["ignis-orbital-api<br/>main → staging<br/>production → produção"]
-    FM["ignis-fire-watch<br/>master → staging<br/>production → produção"]
+    BS["ignis-orbital-api / ignis-fire-watch<br/>staging → ambiente staging<br/>production → ambiente production"]
     CI["GitHub Actions (CI)"]
   end
-  subgraph RW["Railway — projeto ignis"]
-    subgraph STG["ambiente staging"]
-      WEBs["web (nginx + SPA)"] --> APIs["api (FastAPI)"] --> PGs[("postgis + volume")]
+  subgraph RW["Railway — projeto IGNIS Orbital (us-east4)"]
+    subgraph STG["staging"]
+      WEBs["ignis-web (público)<br/>nginx + SPA + proxy /api/v1"] -- rede privada --> APIs["ignis-api"] --> PGs[("ignis-postgis + volume")]
+      INGs["ignis-ingest (cron 15 min)"] --> PGs
     end
-    subgraph PRD["ambiente production"]
-      WEBp["web"] --> APIp["api"] --> PGp[("postgis + volume")]
+    subgraph PRD["production"]
+      WEBp["ignis-web<br/>ignis.andradesystems.com.br"] -- rede privada --> APIp["ignis-api"] --> PGp[("ignis-postgis + volume")]
     end
   end
-  BM -- push --> CI
-  FM -- push --> CI
+  BS -- push --> CI
   CI -- "Wait for CI (check suites)" --> STG
   CI -- "Wait for CI" --> PRD
 ```
 
-- **Infraestrutura como código:** `ignis-orbital-api/.railway/railway.ts` (SDK `railway/iac`, versão fixada).
-  - O formato antigo `railway.json` (*Config as Code*) foi depreciado pelo Railway e deixa de funcionar em **01/12/2026**, por isso não é usado.
-  - O arquivo declara o projeto inteiro: os dois ambientes e os serviços dos dois repositórios.
-- **Contrato verificado na CI** (job "Railway IaC"): tipos e as invariantes de §5, em 20 checagens.
+- **Infraestrutura como código:** `ignis-orbital-api/.railway/railway.ts` (SDK `railway/iac` 3.16.0, CLI ≥ 5.42.1; usado o 5.70.0).
+  - O antigo `railway.json` (*Config as Code*) foi depreciado e deixa de funcionar em 01/12/2026.
+  - O arquivo descreve os dois ambientes. Cada ambiente é aplicado em separado (`railway environment link <amb>` → `railway config plan` → `railway config apply`).
+- **Contrato verificado na CI** (job "Railway IaC"): 28 checagens (§5).
+- **No Windows**, o SDK confere a versão do CLI pela variável `_`, que o Git Bash reescreve a cada comando. Por isso, rode `plan`/`apply` pelo PowerShell:
+  ```powershell
+  $env:_ = "$env:APPDATA\npm\node_modules\@railway\cli\bin\railway.exe"; & $env:_ config plan
+  ```
+
+**O que o IaC não faz** (feito por CLI/API e registrado no relatório):
+- Domínio personalizado. O Railway recusa registrar pelo IaC: o domínio é criado com `railway domain`, e depois o IaC o declara.
+- Domínio gerado do staging (`railway domain --service ignis-web`).
+- Agendamento de backups de volume.
+- Instâncias de produção de serviços que já existiam: criadas com `environmentPatchCommit`, sem deploy.
+- Migração de região de um volume com serviço anexado.
 
 ## 2. Ambientes e isolamento
 
 | | staging | production |
 |---|---|---|
-| Branch da API | `main` | `production` |
-| Branch do frontend | `master` | `production` |
-| Banco | `postgis` próprio + volume próprio (5 GB) | `postgis` próprio + volume próprio (10 GB) |
-| Segredos (`JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `NASA_FIRMS_MAP_KEY`) | gerados **só** para staging | gerados **só** para produção; nunca copiados de staging |
+| Branch (os dois repositórios) | `staging`: branch de implantação, avançado só por fast-forward. Hoje = HEAD de `feat/ignis-admin-cockpit`; depois do merge da pilha, segue o branch padrão | `production`, movido só pelo `promote.yml` (ainda não existe) |
+| Banco | `ignis-postgis` + volume próprio (5 GB) | `ignis-postgis` + volume próprio (10 GB) |
+| Segredos (`POSTGRES_PASSWORD`, `JWT_SECRET_KEY`) | gerados **só** para staging | gerados **só** para produção |
 | `APP_ENV` | `staging` | `production` |
-| Domínios | `*.up.railway.app` de staging | `*.up.railway.app` de produção (domínio próprio opcional) |
-| Dados | sintéticos/de homologação, **nunca** cópia de produção | reais |
+| Domínio | `ignis-web-staging.up.railway.app` | `ignis.andradesystems.com.br` (DNS pendente) |
+| Dados | contas de homologação `@example.org`; focos INPE reais | vazio |
+| Ingestão | `ignis-ingest`, cron a cada 15 min | desligada (sem serviço) |
 
-Proteções no código contra misturar ambientes:
-
-- **`APP_ENV` diferente do ambiente Railway impede o boot.** A comparação é com `RAILWAY_ENVIRONMENT_NAME`, injetado pelo Railway. Exemplo: uma configuração de produção colada em staging (`app/config.py`, `reject_environment_mismatch`). Ambientes de PR sempre recebem a configuração de staging.
-- **Configuração insegura impede o boot em staging/production:**
-  - segredo JWT fraco ou publicado;
-  - `DATABASE_URL` de desenvolvimento, sem senha ou com a senha publicada;
-  - CORS sem HTTPS, com `*` ou com `localhost`.
-- **O seed demonstrativo nunca roda em staging/production**, e não existe forma de liberá-lo.
+Proteções no código contra misturar ambientes (inalteradas):
+- `APP_ENV` diferente do ambiente Railway impede o boot (`reject_environment_mismatch`).
+- Configuração insegura impede o boot: JWT fraco; `DATABASE_URL` de desenvolvimento; CORS sem HTTPS, com `*` ou com `localhost`.
+- O erro de configuração nunca ecoa os valores (`hide_input_in_errors`).
+- O seed demonstrativo nunca roda em staging/production.
 
 ## 3. Serviços
 
-| Serviço | Origem | Build | Start | Pre-deploy | Healthcheck | Réplicas |
-|---|---|---|---|---|---|---|
-| `postgis` | imagem `postgis/postgis:16-3.4` (a mesma da CI e do compose) | — | padrão da imagem | — | — | 1, volume em `/var/lib/postgresql/data` |
-| `api` | `ignis-orbital-api` | `Dockerfile` (lock com hashes, só wheels, usuário não-root, código somente leitura) | `/app/scripts/entrypoint.sh api` | `/app/scripts/entrypoint.sh migrate` (timeout 600 s) | `/ready` (verifica o banco), 120 s | 1 (ver §12) |
-| `web` | `ignis-fire-watch` | `Dockerfile` (Node 22 → nginx-unprivileged 1.28, imagens fixadas por digest) | padrão da imagem | — | `/healthz`, 30 s | 1 |
-| `orbital-ingest` | `ignis-orbital-api` | `Dockerfile` | ingestão NASA FIRMS + INPE (Sprint 1.2), papel `ingest` | — | — | cron `*/15 * * * *`, `restartPolicyType NEVER`, **desligado** (`ENABLE_ORBITAL_INGEST_JOB = false`) até a autorização de homologação |
+| Serviço | Origem | Start | Pre-deploy | Healthcheck | Exposição |
+|---|---|---|---|---|---|
+| `ignis-postgis` | imagem `postgis/postgis:16-3.4` | padrão da imagem | — | — | **privado**, volume em `/var/lib/postgresql/data` (`PGDATA` = `pgdata-2` em staging, `pgdata` em produção) |
+| `ignis-api` | `ignis-orbital-api` (Dockerfile; usuário não-root) | `/app/scripts/entrypoint.sh api` | `/app/scripts/entrypoint.sh migrate` (600 s; serializado por advisory lock) | `/ready`, 120 s | **privado** (sem domínio público) |
+| `ignis-web` | `ignis-fire-watch` (Dockerfile; nginx-unprivileged) | padrão da imagem | — | `/healthz`, 30 s | **único serviço público** |
+| `ignis-ingest` | `ignis-orbital-api` (mesma imagem) | `/app/scripts/entrypoint.sh ingest` (uma rodada e sai) | — | — | privado; cron `*/15 * * * *` só em staging |
 
-O banco **não tem domínio público nem TCP proxy**. Só os serviços do mesmo ambiente o alcançam, pela rede privada (`postgis.railway.internal`). A administração é feita por `railway ssh` no serviço `api`, nunca por porta exposta.
+Todos rodam com 1 réplica em `us-east4-eqdc4a` (`replicas: { "us-east4-eqdc4a": 1 }`; o campo `deploy.region` **não** é aplicado pelo Railway).
 
-**Frontend no Railway:**
-- **Build:** valida `VITE_USE_API`/`VITE_API_URL` (`deploy/build-env.mjs`). O build falha se:
-  - o domínio da API não resolveu;
-  - a URL não usa HTTPS;
-  - a URL tem caminho além da origem.
-- **Servidor:** o nginx escuta no `PORT` injetado pelo Railway e oferece:
-  - `/healthz`;
-  - *fallback* de rotas SPA para `index.html`, sempre revalidado;
-  - assets com hash em cache de 1 ano, e 404 real para asset inexistente;
-  - CSP com `connect-src` restrito à origem da API, mais `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` e HSTS.
+**Same-origin (nginx do `ignis-web`):**
+- O build usa `VITE_API_URL=same-origin`: URLs relativas, e o CSP fica com `connect-src 'self'`.
+- Na partida, `deploy/nginx/15-ignis-api-proxy.sh` valida `IGNIS_API_UPSTREAM` (`http://host:porta`). Um valor inválido impede o start.
+- O nginx encaminha **só** `/api/v1/`, `/health` e `/ready`. `/docs`, `/openapi.json` e tudo o mais ficam no SPA.
+- O resolvedor DNS vem de `/etc/resolv.conf`, com `valid=10s`: um redeploy da API não deixa o nginx num IP antigo.
+- O `X-Real-IP` escrito pela borda do Railway é repassado à API, que o usa para o rate limit.
+- `gzip` para JS/CSS/JSON/GeoJSON. Corpo limitado a 1 MB (a API não tem upload).
+- API inalcançável → `503` JSON, com os cabeçalhos de segurança.
 
 ## 4. Variáveis e segredos
 
-| Serviço | Variável | Valor | Tipo |
-|---|---|---|---|
-| postgis | `POSTGRES_USER` / `POSTGRES_DB` | `ignis` | literal (IaC) |
-| postgis | `POSTGRES_PASSWORD` | `openssl rand -hex 32` (hex: seguro dentro da URL) | **segredo selado**, por ambiente |
-| postgis | `PGDATA` | `/var/lib/postgresql/data/pgdata` | literal |
-| postgis | `DATABASE_URL` | `postgresql://…@${{RAILWAY_PRIVATE_DOMAIN}}:5432/…` | referência interna |
-| api | `APP_ENV` | `staging` / `production` | literal por ambiente |
-| api | `DATABASE_URL` | referência a `postgis.DATABASE_URL`; a API converte `postgresql://` para o dialeto asyncpg | referência |
-| api | `JWT_SECRET_KEY` | `python -c "import secrets;print(secrets.token_urlsafe(48))"` | **segredo selado**, por ambiente |
-| api | `NASA_FIRMS_MAP_KEY` | chave do proprietário (opcional em staging) | **segredo selado** |
-| api | `CORS_ORIGINS` | `https://${{web.RAILWAY_PUBLIC_DOMAIN}}` (+ domínio próprio, se houver) | referência |
-| api | `TRUST_PROXY_HEADERS` / `CLIENT_IP_HEADER` | `true` / `x-real-ip` | literal |
-| api | `FORWARDED_ALLOW_IPS` | `*` (o contêiner só é alcançável pelo proxy do Railway) | literal |
-| api | `MIGRATE_ON_START` | `false` (a migração roda no pre-deploy) | literal |
-| api | `WEB_CONCURRENCY` | `2` | literal |
-| api | `ORBITAL_ALERTS_DEMO_MODE` | `false` | literal |
-| web | `VITE_USE_API` | `true` | literal (build arg) |
-| web | `VITE_API_URL` | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}` | referência (build arg) |
+Nomes, valores e tipos: ver [RAILWAY-PROVISIONING-REPORT.md §8](RAILWAY-PROVISIONING-REPORT.md).
 
-**Regras para segredos:**
-
-- No IaC, todo segredo é `preserve()`: o valor vive só no Railway, como variável **selada**. A checagem de contrato falha se um segredo aparecer como literal.
-- Gravar os segredos pelo painel (*Seal variable*), um ambiente por vez, **nunca** em linha de comando, chat ou arquivo versionado.
-- Se faltar um segredo, o serviço **não sobe**:
-  - sem `POSTGRES_PASSWORD`, o PostGIS não inicializa;
-  - sem `JWT_SECRET_KEY`, a API recusa o padrão de desenvolvimento.
-- Rotação: trocar `JWT_SECRET_KEY` invalida todas as sessões. Para trocar `POSTGRES_PASSWORD`, é preciso também executar `ALTER USER` no banco.
+**Regras:**
+- No IaC, todo segredo é `preserve()`. A checagem de contrato falha se um segredo aparecer como literal.
+- Gerar segredos sem exibi-los:
+  ```bash
+  python -c "import secrets,sys;sys.stdout.write(secrets.token_hex(32))" | railway variable set NOME --stdin --service <svc> --environment <amb> --skip-deploys
+  ```
+  Nunca colocar o valor em argumento, chat, log ou arquivo versionado.
+- Selar no painel (*Seal*) depois de gravar (pendência B7).
+- Variáveis fora do IaC são **removidas** pelo próximo `config apply` (o plano mostra `Delete variable …`). Uma variável temporária deve sair pelo próprio apply, com `--confirm-destructive`.
+- Rotação:
+  - trocar `JWT_SECRET_KEY` invalida todas as sessões;
+  - trocar `POSTGRES_PASSWORD` exige `ALTER USER` no banco antes.
+- `NASA_FIRMS_MAP_KEY` não existe: ao homologar a chave, gravá-la por stdin **e** acrescentar `NASA_FIRMS_MAP_KEY: preserve()` ao `ignis-api` e ao `ignis-ingest` no IaC, no mesmo PR.
 
 **Por que `X-Real-IP` e não `X-Forwarded-For`:**
-- O edge do Railway sobrescreve o `X-Real-IP` em toda requisição.
-- O número de saltos do `X-Forwarded-For` não é fixo: a última entrada pode ser um proxy interno compartilhado por todos os clientes. Com a configuração anterior (última entrada do XFF), o rate limit tenderia a juntar todos os usuários num só balde.
-- Fonte: respostas da equipe do Railway no [Help Station](https://station.railway.com/questions/which-client-address-headers-does-the-ra-fb9e36d7).
-- Há relato de que, com a camada de CDN no caminho, o `X-Real-IP` chegou com o IP do CDN. Por isso, verificar na homologação (HOMOLOGATION-CHECKLIST H-12).
+- A borda do Railway sobrescreve `X-Real-IP` em toda requisição.
+- Verificado no staging: com `X-Real-IP`/`X-Forwarded-For` forjados, a 11ª tentativa de login da mesma origem recebeu 429.
 
 ## 5. Deploy condicionado à CI
 
 | Mecanismo | Onde | Efeito |
 |---|---|---|
-| **Wait for CI** (`checkSuites: true`) | `railway.ts`, serviços `api` e `web` | O deploy fica em `WAITING` até todas as execuções do GitHub Actions no commit terminarem. Se alguma falhar, o deploy é **descartado** |
-| CI roda em `push` para `main`/`master` e `production` | `.github/workflows/ci.yml` dos dois repositórios | Requisito do Wait for CI |
-| Branch por ambiente | `railway.ts` (`BRANCHES`) | **Merge em `main`/`master` só chega a staging.** A checagem de contrato falha se produção apontar para `main`/`master` |
+| **Wait for CI** (`checkSuites: true`) | `railway.ts`, serviços `ignis-api`, `ignis-web` e `ignis-ingest` | O deploy fica em `WAITING` até todas as execuções do GitHub Actions no commit terminarem. Se alguma falhar, o deploy é **descartado** |
+| CI roda em `push` para `main`/`master`, `staging` e `production` | `.github/workflows/ci.yml` dos dois repositórios | Requisito do Wait for CI |
+| Branch por ambiente | `railway.ts` (`BRANCHES`) | Staging implanta do branch `staging`; produção, do `production`. A checagem de contrato falha se algum ambiente apontar para `main`/`master` ou para um branch `feat/*` |
 | Promoção manual | `.github/workflows/promote.yml` dos dois repositórios | Ver abaixo |
 | Pre-deploy `migrate` | `railway.ts` | Executa a migração uma vez por deploy, antes de a nova versão receber tráfego. Se falhar, o deploy aborta |
 | Healthcheck | `/ready` (api), `/healthz` (web) | Versão que não fica saudável não substitui a anterior |
@@ -155,110 +146,120 @@ Observação: o push feito pelo `GITHUB_TOKEN` não dispara uma nova execução 
    - restringir atualizações, com bypass apenas para *GitHub Actions* e o proprietário;
    - exigir os checks da CI.
 3. **Ruleset** em `main` (backend) e `master` (frontend): exigir PR e os checks da CI.
-4. **Frontend:** executar a estratégia de branches (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`): tag de arquivamento de `main`, e `master` como branch padrão. Nenhum force-push, nenhum histórico perdido.
-5. **Vercel (transitório):** o projeto Vercel antigo ainda está ligado ao repositório do frontend.
+4. **Ruleset** no branch `staging` dos dois repositórios: bloquear *force push* e exclusão (só fast-forward por quem homologa).
+5. **Frontend:** executar a estratégia de branches (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`): tag de arquivamento de `main`, e `master` como branch padrão. Nenhum force-push, nenhum histórico perdido.
+6. **Vercel (transitório):** o projeto Vercel antigo ainda está ligado ao repositório do frontend.
    - O `vercel.json` foi reduzido a `git.deploymentEnabled: false`, para que nenhum merge publique nada lá.
    - O proprietário deve **desconectar o repositório do projeto Vercel**, ou excluir o projeto. Depois disso, o `vercel.json` pode ser removido.
 
-## 7. Provisionamento inicial (com autorização)
 
-Pré-requisitos:
-- PRs #3 e #4 e os PRs desta preparação mergeados;
-- CI verde;
-- decisões de §11 tomadas.
+## 7. Provisionamento (executado em 04/11/2026) e como repetir
 
-1. Instalar o CLI do Railway (≥ 5.63) e autenticar com a conta do proprietário.
-2. Em `ignis-orbital-api/.railway`, rodar `npm ci`, depois `railway link`, e criar o projeto `ignis` com os ambientes `staging` e `production`.
-3. `railway config plan` (**somente leitura**). Conferir:
-   - a lista de recursos de §3;
-   - os branches;
-   - `checkSuites`;
-   - os segredos marcados como `preserve`.
+O que foi feito, em ordem; os detalhes e as correções estão no relatório:
 
-   Divergência entre o plano e este documento = parar e corrigir o IaC.
-4. `railway config apply`, **primeiro no ambiente `staging`**.
-5. Gerar os domínios públicos de `api` e `web`, nas *Settings* de cada serviço. Os dois precisam existir antes do primeiro deploy, porque cada um referencia o domínio do outro (CORS e `VITE_API_URL`).
-6. Gravar os segredos selados de staging: `POSTGRES_PASSWORD`, `JWT_SECRET_KEY` e, se houver, `NASA_FIRMS_MAP_KEY`.
-7. Aceitar no Railway as permissões do GitHub pedidas pelo *Wait for CI*.
-8. Deploy, nesta ordem:
-   1. `postgis`;
-   2. `api` (o pre-deploy migra o banco);
-   3. `web`.
-9. **Primeiro administrador**, com `railway ssh --service api --environment staging`:
-   ```bash
-   python -m seed.bootstrap_admin --email <e-mail-institucional> --name "<Nome>"
-   ```
-   A senha é digitada no prompt e segue a política da API. A criação é auditada (`user.bootstrap_admin_created`).
-10. Executar o **HOMOLOGATION-CHECKLIST** em staging.
-11. Com staging homologado, repetir os passos 4 a 9 em `production`, com **segredos novos**. Depois, promover pelo workflow `promote.yml` dos dois repositórios.
+1. `railway init --name "IGNIS Orbital" --workspace <id>`; `railway environment new staging`.
+2. Staging:
+   1. `config plan` → `config apply`;
+   2. segredos por stdin;
+   3. `railway domain --service ignis-web` (domínio gerado);
+   4. branch `staging` criado nos dois repositórios;
+   5. deploy depois da CI.
+3. Produção:
+   1. instâncias dos serviços criadas sem deploy (`environmentPatchCommit` com `skipDeploys`);
+   2. região fixada;
+   3. segredos próprios;
+   4. `config apply` (sem o domínio);
+   5. `railway domain ignis.andradesystems.com.br --service ignis-web --environment production`;
+   6. domínio declarado no IaC.
+4. Backups de volume diário, semanal e mensal nos dois ambientes (`volumeInstanceBackupScheduleUpdate`).
+5. Staging:
+   1. primeiro admin (relatório §7);
+   2. contas de homologação pelo cockpit;
+   3. rodadas manuais de ingestão;
+   4. teste de fonte indisponível;
+   5. cron ligado.
 
-## 8. Smoke pós-deploy
+**Para levar o código novo ao staging:**
+```bash
+git push origin feat/ignis-admin-cockpit:staging   # fast-forward; nunca --force
+```
+
+O Railway espera a CI do commit, migra no pre-deploy e só troca a versão se `/ready` responder.
+
+**Primeiro deploy de produção** (depois dos bloqueios B1–B4 do relatório):
+1. Rodar `promote.yml` nos dois repositórios, com aprovação.
+2. Acompanhar o deploy.
+3. Executar o relatório §12 (primeiro admin).
+4. Executar o HOMOLOGATION-CHECKLIST.
+5. Conferir o HTTPS do domínio.
+
+## 8. Smoke pós-deploy (same-origin)
 
 ```bash
-API=https://<dominio-api>; WEB=https://<dominio-web>
-curl -sf $API/health        # {"status":"ok",...,"environment":"staging|production"}
-curl -sf $API/ready         # {"status":"ready","database":"connected"}
-curl -s -o /dev/null -w '%{http_code}\n' -X POST $API/api/v1/orbital-alerts/ingest   # 401
-curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS $API/api/v1/auth/login \
-  -H "Origin: https://evil.example.com" -H "Access-Control-Request-Method: POST"     # 400
-curl -sf $WEB/healthz       # ok
-curl -sI $WEB/gestor/war-room | grep -i '^content-security-policy'   # connect-src com a origem da API
+WEB=https://ignis-web-staging.up.railway.app      # produção: https://ignis.andradesystems.com.br
+curl -sf $WEB/healthz                               # ok
+curl -sf $WEB/health                                # {"status":"ok","service":"ignis-orbital-api"}
+curl -sf $WEB/ready                                 # {"status":"ready","database":"connected"}
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $WEB/api/v1/orbital-alerts/ingest   # 401
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $WEB/api/v1/aurora/chat             # 404
+curl -s $WEB/api/v1/reports/intake                  # {"accepting":false,...}
+curl -s $WEB/docs | grep -c 'id="root"'             # 1 (SPA; a documentação não é exposta)
+curl -s -o /dev/null -D - -X OPTIONS $WEB/api/v1/auth/login \
+  -H "Origin: https://evil.example.com" -H "Access-Control-Request-Method: POST" | head -1   # 400
+curl -sI $WEB/ | grep -i "connect-src 'self'"
 ```
 
 ## 9. Rollback
 
 | Situação | Ação |
 |---|---|
-| Deploy novo reprovado no healthcheck ou no pre-deploy | Nada a fazer: o Railway mantém a versão anterior ativa |
+| Deploy novo reprovado no healthcheck ou no pre-deploy | Nada a fazer: o Railway mantém a versão anterior |
 | CI falhou no commit | O Railway descarta o deploy (*Wait for CI*) |
-| Regressão após o deploy | Railway → *Deployments* → *Redeploy* da versão anterior. **Não** retroceder o branch `production` (o ruleset bloqueia; o histórico é preservado) |
-| Migração problemática | Antes de cada deploy com migração, fazer backup (§10). As migrações atuais são aditivas e têm `downgrade` testado na CI. Mesmo assim, não executar `alembic downgrade` em produção sem backup e sem autorização |
-| Vazamento de segredo | Rotacionar o segredo selado e redeployar o serviço |
+| Regressão após o deploy | Railway → serviço → *Deployments* → versão anterior → *Rollback* (ou a mutação `deploymentRollback(id)`). Testado em staging (ADMIN-VALIDATION-GUIDE §5). **Não** retroceder branches |
+| Migração problemática | Backup lógico antes de cada deploy com migração (relatório §5). Migrações aditivas com `downgrade` testado; nunca `alembic downgrade` em produção sem backup e autorização |
+| Vazamento de segredo | Gerar um novo valor por stdin, selar e redeployar |
 
-## 10. Usuários demonstrativos, backups e operação
+## 10. Contas, backups e operação
 
-- **Banco novo:** não haverá contas demo, porque o seed é bloqueado em staging/production.
-- **Banco reaproveitado:**
-  1. `python -m seed.demo_users check` (exit 4 = há risco);
-  2. criar o admin real (`bootstrap_admin`);
-  3. com autorização, `deactivate --confirm-host <host>`;
-  4. `check` de novo, que deve dar exit 0.
-
-  O procedimento está detalhado e testado em SPRINT-0-DELIVERY §3 e §12.
-- **Backups:** o PostGIS roda em imagem própria, não no Postgres gerenciado do Railway. Por isso:
-  - ativar os *backups de volume* do Railway (diário + semanal) no `postgis-data` de produção;
-  - adicionar `pg_dump` lógico agendado para fora do Railway (por exemplo, S3 `sa-east-1`, no molde do `backup-worker` do OrkenGov);
-  - testar a restauração antes do go-live (H-20).
+- **Bancos novos:** sem contas demo (o seed é bloqueado). Primeiro admin de produção: relatório §12.
+- **Backups:**
+  - os backups de volume estão ativos (diário 6 d, semanal 27 d, mensal 89 d);
+  - falta o `pg_dump` lógico agendado para fora do Railway;
+  - falta o teste de restauração (H-22).
 - **Observabilidade:**
-  - alertas de deploy e healthcheck do Railway;
-  - monitor externo de `/ready` e `/healthz`;
-  - revisão trimestral com `demo_users check`.
+  - healthchecks do Railway;
+  - o deploy de ingestão com `exit≠0` aparece como falho;
+  - cockpit `/admin`;
+  - alertas e monitor externo: pendência B8.
+- **Nunca** migrar a região de um volume com dados sem parar o banco e sem backup lógico (relatório §4).
 
-## 11. Decisões pendentes do proprietário
+## 11. Decisões do proprietário
 
-| # | Decisão | Por que importa |
+| # | Decisão | Estado |
 |---|---|---|
-| D-1 | **Região do Railway** | O Railway não tem região na América do Sul. Denúncias contêm dados pessoais: hospedar nos EUA ou na Europa é transferência internacional (LGPD, art. 33). Registrar a base legal ou o mecanismo de transferência e escolher a região (`us-east4-eqdc4a`, Virgínia, tem a menor latência para o Ceará; regiões oficiais: EUA Oeste, EUA Leste, Amsterdã, Singapura) |
-| D-2 | Domínio próprio | Opcional. Se houver, incluir em `CORS_ORIGINS` (o CSP do web segue `VITE_API_URL`) |
-| D-3 | Exposição de `/docs` em produção | SECURITY-REVIEW R-09 |
-| D-4 | Desconectar o projeto Vercel | §6, passo 5 |
-| D-5 | Incidente GitGuardian 33462092 | **Pendência administrativa conhecida**, por decisão do proprietário de 03/11/2026: não bloqueia o desenvolvimento. O check do GitGuardian **continua ativo**, as credenciais demonstrativas **não são reutilizadas** (o seed é bloqueado em ambientes operacionais e a API recusa senhas publicadas), e a classificação no painel fica a cargo do proprietário |
+| D-1 | Região e LGPD | Região **`us-east4-eqdc4a`** em uso. A transferência internacional fica registrada. Denúncias (dados pessoais) estão **fechadas** (`PUBLIC_REPORTS_ENABLED=false`) até o proprietário registrar a análise LGPD |
+| D-2 | Domínio próprio | `ignis.andradesystems.com.br` no `ignis-web` de produção; DNS na GoDaddy pendente (relatório §10) |
+| D-3 | `/docs` em produção | Decidido no código: nunca público; especificação só para admin |
+| D-4 | Desconectar o projeto Vercel | Pendente (§6, passo 6) |
+| D-5 | GitGuardian | 33462092, 39541748–39541751, **39592651** e **39592652**: classificar no painel (ADMIN-SECURITY-REVIEW §11) |
+| D-6 | Ingestão em produção | Desligada; ligar só depois da homologação de staging, com autorização |
 
-## 12. Workers futuros (Fase 1)
+## 12. Ingestão
 
-- **Ingestão FIRMS como job agendado do Railway:**
-  - um serviço `orbital-ingest`, construído com a mesma imagem da API;
-  - `cronSchedule */15 * * * *` e `restartPolicy NEVER`;
-  - declarado em `railway.ts` (`ingestJob()`) atrás de `ENABLE_ORBITAL_INGEST_JOB`.
+- `ignis-ingest`: mesma imagem da API, papel `ingest`. Uma rodada por execução (FIRMS + INPE), `restartPolicy NEVER`.
+- A rodada registra `ingestion_runs`, com deduplicação pela chave natural e pelo ETag do INPE. O lease (advisory lock) impede rodadas simultâneas.
+- O exit code reflete falhas (`2` = fonte indisponível).
+- **Staging:** cron `*/15 * * * *` ligado em 04/11/2026, depois de três validações:
+  - rodada manual: 320 focos do CE;
+  - reexecução idempotente;
+  - fonte indisponível registrada como `unavailable`.
+- **Produção:** `INGEST.production = { service: false, cron: false }`. Ligar = mudar o IaC num PR revisado, aplicar e observar.
+- **FIRMS:** desabilitada (sem chave); estado `disabled/missing_api_key`, nunca dado inventado.
+- **Réplicas da API:** 1, enquanto o rate limit e o cache forem em memória.
 
-  O papel `ingest` existe e está coberto por testes desde a Sprint 1.2. Ligar só com autorização, primeiro em staging (SPRINT-1.2-DELIVERY §10).
-- **Requisitos do job:**
-  - idempotência por chave natural (satélite, data/hora de aquisição, lat/lon);
-  - `pg_advisory_lock`, para que duas execuções não se sobreponham;
-  - registro de cada execução (`ingestion_runs`).
-- **Réplicas da API:** continuam em 1 enquanto o rate limit e o cache FIRMS forem em memória por processo. Para escalar, mover esse estado para o banco ou para um Redis do próprio ambiente.
+## 13. Evidências históricas (ambiente local isolado, 03/11/2026)
 
-## 13. Evidências (ambiente local isolado, 03/11/2026)
+As evidências do Railway real estão em RAILWAY-PROVISIONING-REPORT §11. Esta seção registra o ensaio local anterior; a arquitetura ainda usava domínio público para a API.
 
 Execução com Docker:
 - PostGIS `16-3.4` em rede privada (`ignis-rw`), sem porta publicada;

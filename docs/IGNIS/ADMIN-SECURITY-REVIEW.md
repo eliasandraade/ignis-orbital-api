@@ -114,10 +114,51 @@ descrito), **Residual** (aceito/pendente, com recomendação).
 
 ## 10. Riscos residuais (resumo)
 
-1. Rate limit em memória por processo (multiplica com réplicas).
+1. Rate limit em memória por processo. **Mitigado no Railway (04/11/2026):** 1 réplica e
+   `WEB_CONCURRENCY=1`, de modo que o limite vale exatamente por IP; escalar exige mover o estado para
+   Redis ou para o banco.
 2. Sem MFA para administradores.
 3. Token JWT em `localStorage`.
-4. `POST /api/v1/aurora/chat` público (experimental).
+4. ~~`POST /api/v1/aurora/chat` público (experimental).~~ **Resolvido (04/11/2026):** as rotas da
+   Aurora não são montadas em staging/produção (404); `AURORA_EXPERIMENTAL` não as liga lá.
 5. Recuperação de acesso total depende de shell no serviço da API.
 6. Sem renovação de token: sessão expira em 8 h e exige novo login.
 7. `last_login_at` só existe para logins após a migração a015 ("Sem registro" antes disso).
+
+## 11. Verificações de CI: SonarCloud e GitGuardian (04/11/2026)
+
+**SonarCloud, PR `ignis-orbital-api#9`:**
+- Os 5 apontamentos novos eram reais e foram corrigidos (commit `eb503ed`):
+  - 3× S1192 (literal repetido): constantes `PUBLIC`/`AUTHENTICATED` em `app/core/permissions.py` e
+    `ACTION_ROLE_CHANGE`/`ACTION_PASSWORD_RESET` em `app/users/admin_service.py`;
+  - 2× S8409: `response_model` redundante com a anotação de retorno, em `/admin/ingestion-runs` e em
+    `/admin/audit-logs`.
+- Depois: 0 apontamentos abertos e Quality Gate `OK`.
+- No `ignis-fire-watch#8`, 0 apontamentos.
+
+**Cobertura no Sonar:**
+- A cobertura do pytest (88 % na suíte completa) é gerada na CI como artefato, mas **não chega ao
+  SonarCloud**. O projeto usa *Automatic Analysis*, e o job "SonarQube Cloud (cobertura)" é opt-in
+  (`vars.SONAR_CI_ANALYSIS == 'true'`), por isso aparece como `skipped`.
+- A API de medidas do SonarCloud não retorna `coverage` para o projeto nem para o PR.
+- Para publicar a cobertura, o proprietário precisa:
+  1. desligar a *Automatic Analysis* no SonarCloud;
+  2. criar o segredo `SONAR_TOKEN`;
+  3. definir a variável `SONAR_CI_ANALYSIS=true`.
+
+**GitGuardian:**
+
+| Incidente | Repositório / commit | Arquivo | O que é | Estado no código atual |
+|---|---|---|---|---|
+| `39592651` | `ignis-orbital-api` `6131580` | `tests/test_postgis_admin.py:155` | senha **deliberadamente errada** de um teste de troca de senha (literal de 15 caracteres sem uso fora do teste) | ausente em `HEAD`; senhas de teste geradas por `secrets.token_urlsafe` desde `9d82864` |
+| `39592652` | `ignis-fire-watch` `c0dfd4e` | `e2e/admin.spec.ts:15` | senha provisória do usuário criado pelo E2E (`e2e-provisoria-<timestamp>`), válida só para uma conta descartável da pilha local | ausente em `HEAD`; `randomBytes(18)` desde `e21456c` |
+
+Evidências:
+- `git grep` nos dois `HEAD` não encontra os literais.
+- Nenhum deles é credencial de serviço, banco ou conta real.
+- Os ambientes Railway usam segredos gerados por ambiente, nunca esses valores.
+
+**Classificação administrativa necessária (proprietário, no painel do GitGuardian):** marcar os dois
+incidentes como *Resolved → Test credential* (ou *False positive*).
+- O check continua ativo.
+- O histórico não foi reescrito.
