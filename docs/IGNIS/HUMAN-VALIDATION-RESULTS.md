@@ -34,7 +34,7 @@ Onde houve interceptação de rede, ela está declarada.
 | R6 | Interface: mapa, filtros e detalhe | navegador (Chromium do app) e Playwright | contagens iguais às da API; detalhe com coordenada persistida; console sem erros |
 | R7 | Sala de Crise sem incidente | `/gestor/war-room` como gestor | "Nenhum incidente crítico ativo", nenhuma ação disponível |
 | R8 | E2E Playwright local | `validate.sh e2e` | **18 passando** (16 em desktop e 2 em mobile), 0 *skip* |
-| R9 | E2E na CI | job "E2E (Playwright, pilha real FastAPI + PostGIS)" nos dois repositórios | passou nas duas primeiras execuções (api run `41790574960`, web run `41790578136`) |
+| R9 | E2E na CI | job "E2E (Playwright, pilha real FastAPI + PostGIS)" nos dois repositórios, com a amostra do INPE | passou em todas as execuções: api runs `41790574960` e `41793767587`; web runs `41790578136`, `41793781606` e `41794753932` |
 | R10 | Backend completo (local) | `pytest` com PostGIS descartável | 404 passando, 1 pulado (SIGTERM, só fora do Windows); cobertura 85,10% |
 | R11 | Frontend | typecheck, ESLint (0 erros), Vitest | Vitest: 40 passando |
 | R12 | Medição de consultas | 50 mil focos sintéticos num banco descartável, `EXPLAIN ANALYZE` | 0,4 a 17 ms com os índices existentes; GeoJSON municipal em 0,99 MB, com ~330 ms para simplificar a geometria e cache em memória depois |
@@ -69,7 +69,7 @@ Nenhum teste de integração usa tela simulada.
   - os 5 alertas do commit `8883c0c` são falsos positivos (nenhum valor secreto: interpolação de variável e prefixos de geração);
   - o código atual já não tem o padrão;
   - como não reescrevemos histórico, **o proprietário precisa marcar os 5 alertas no painel do GitGuardian**. Até lá, esse check pode continuar vermelho.
-- **Teste de processo morto (`test_killed_process_run_is_recovered_by_the_next_round`):** falhou **uma vez** localmente sob carga (Windows, pilha Docker ativa) e passou em todas as reexecuções. A asserção agora registra o `error_code` para diagnóstico; o acompanhamento está no relatório final.
+- **Teste de processo morto (`test_killed_process_run_is_recovered_by_the_next_round`):** falhou **1 vez em 10 execuções** locais, sob carga (Windows, pilha Docker ativa e suíte completa). A rodada seguinte à recuperação terminou como `error` em vez de `ok`, sem o código registrado. Em seguida passou 9 vezes seguidas (3 isoladas e 6 em lote com os testes de queda e cancelamento). A asserção agora registra o `error_code`. Na CI Linux não houve falha. **Causa não identificada**; pendência de engenharia.
 - **Sala de Crise, equipes, recursos e missões:** sem dados demonstrativos, ficam vazios. Há o fluxo real de denúncia → validação → incidente, mas esses módulos não foram exercitados ponta a ponta pelo E2E nesta missão.
 - **Rate limit em memória, por processo:** com mais de uma réplica, o limite efetivo se multiplica. Continua pendente (Fase 1, Sprint 1.4).
 - **Mapa base:** o OpenStreetMap padrão só serve para testes de baixo volume. Um provedor institucional é configurável (`VITE_TILE_URL`).
