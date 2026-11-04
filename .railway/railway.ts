@@ -51,6 +51,18 @@ export const PRODUCTION_DOMAIN = "ignis.andradesystems.com.br";
 /** Same major versions as CI and docker-compose (PostgreSQL 16 + PostGIS 3.4). */
 export const POSTGIS_IMAGE = "postgis/postgis:16-3.4";
 
+/**
+ * Cluster directory inside the volume. Staging uses `pgdata-2`: its first
+ * cluster (`pgdata`) was copied while running during the volume's region
+ * migration (europe-west4 → us-east4, 2026-11-04, before any migration or
+ * data) and arrived without the `ignis` database. It is left in place, not
+ * deleted (RAILWAY-PROVISIONING-REPORT.md). Never change a value that holds data.
+ */
+export const PGDATA_DIR: Record<IgnisEnvironment, string> = {
+  staging: "pgdata-2",
+  production: "pgdata",
+};
+
 /** Port the API listens on; referenced by ignis-web's private upstream. */
 export const API_PORT = "8000";
 
@@ -102,7 +114,7 @@ export default defineRailway((ctx, project) => {
       // Hex value (URL-safe) set once per environment, sealed.
       POSTGRES_PASSWORD: preserve(),
       // The volume root holds lost+found; initdb needs an empty directory.
-      PGDATA: "/var/lib/postgresql/data/pgdata",
+      PGDATA: `/var/lib/postgresql/data/${PGDATA_DIR[env]}`,
       DATABASE_URL:
         "postgresql://${{POSTGRES_USER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{POSTGRES_DB}}",
     },
