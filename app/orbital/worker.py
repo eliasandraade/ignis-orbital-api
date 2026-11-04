@@ -49,7 +49,9 @@ def configure_logging(secrets: list[str]) -> None:
 
 
 FIXTURE_NAME = re.compile(r"^focos_diario_br_(\d{8})\.csv$")
-FIXTURE_BASE_URL = "http://fixture.invalid/inpe"  # reserved TLD: can never resolve
+FIXTURE_BASE_URL = "https://fixture.invalid/inpe"  # reserved TLD: never resolves
+# Only the documented samples shipped with the code may be ingested as fixtures.
+FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "data" / "samples" / "inpe"
 
 
 class FixtureTransport(httpx.AsyncBaseTransport):
@@ -73,6 +75,9 @@ def fixture_round_inputs(path: Path):
     from app.orbital.contracts import TimeWindow
     from app.orbital.providers.inpe import InpeProvider
 
+    path = path.resolve()
+    if not path.is_relative_to(FIXTURE_ROOT):
+        raise ValueError(f"amostras só de {FIXTURE_ROOT} (arquivos documentados)")
     match = FIXTURE_NAME.match(path.name)
     if not match:
         raise ValueError("o arquivo deve se chamar focos_diario_br_AAAAMMDD.csv")

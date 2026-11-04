@@ -64,4 +64,5 @@ logs/
 
 # Local human-validation stack (deploy/local/validate.sh): generated secrets and logs
 deploy/local/.validation.env
+deploy/local/.validation-db-secret
 deploy/local/.last-ingest.json

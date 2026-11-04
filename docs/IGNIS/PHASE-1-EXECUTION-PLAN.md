@@ -1,6 +1,6 @@
 # IGNIS — Plano de execução da Fase 1: dados reais do Ceará
 
-Data: 03/11/2026, atualizado em 04/11/2026. **Status:** Sprints 1.1 e 1.2 entregues em PRs empilhados, sem merge ([SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md), [SPRINT-1.2-DELIVERY](SPRINT-1.2-DELIVERY.md)). As Sprints 1.3 e 1.4 não foram iniciadas.
+Data: 03/11/2026, atualizado em 04/11/2026. **Status:** Sprints 1.1 e 1.2 entregues em PRs empilhados, sem merge ([SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md), [SPRINT-1.2-DELIVERY](SPRINT-1.2-DELIVERY.md)). As Sprints 1.3 e 1.4 foram executadas parcialmente para a validação humana ([READY-FOR-HUMAN-VALIDATION](READY-FOR-HUMAN-VALIDATION.md)): leitura do banco, mapa do Ceará, painel real, portal público sanitizado e E2E. Ficaram pendentes o rate limit compartilhado e a homologação em staging.
 O plano detalha **como** executar o [PHASE-1-BACKLOG](PHASE-1-BACKLOG.md) na plataforma Railway ([RAILWAY-DEPLOYMENT](RAILWAY-DEPLOYMENT.md)). Os IDs `P0-xx`/`P1-xx` são os do backlog.
 
 ## 1. Objetivo e resultado esperado

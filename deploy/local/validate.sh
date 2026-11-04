@@ -17,6 +17,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE=(docker compose -f "$HERE/compose.yml")
 STATE="$HERE/.validation.env"   # generated, git-ignored
+DB_SECRET="$HERE/.validation-db-secret"   # generated, git-ignored (Compose secret)
 API=http://localhost:8000
 WEB=http://localhost:8080
 
@@ -28,6 +29,7 @@ refuse_remote_targets() {
             RAILWAY_*|DATABASE_URL)
                 echo "Recusado: a variável $var está definida neste shell. Abra um shell limpo." >&2
                 exit 2 ;;
+            *) ;;
         esac
     done
     if [[ "${APP_ENV:-}" == "production" || "${APP_ENV:-}" == "staging" ]]; then
@@ -41,6 +43,11 @@ random_secret() {
     head -c 32 /dev/urandom | base64 | tr -d '/+=\n' | cut -c1-40
 }
 
+account_secret() {
+    # Random, plus a separator and a digit so the API password policy always holds.
+    printf '%s-%s-9' "$(random_secret | cut -c1-6)" "$(random_secret | cut -c1-18)"
+}
+
 load_state() {
     if [[ ! -f "$STATE" ]]; then
         echo "==> Gerando segredos locais em $STATE (fora do Git)"
@@ -48,15 +55,23 @@ load_state() {
         {
             echo "IGNIS_LOCAL_DB_PASSWORD=$(random_secret)"
             echo "IGNIS_LOCAL_JWT_SECRET=$(random_secret)"
-            echo "IGNIS_VALIDATION_PASSWORD_ADMIN=Adm-$(random_secret | cut -c1-20)-9"
-            echo "IGNIS_VALIDATION_PASSWORD_GESTOR=Ges-$(random_secret | cut -c1-20)-9"
-            echo "IGNIS_VALIDATION_PASSWORD_CAMPO=Cam-$(random_secret | cut -c1-20)-9"
+            for role in ADMIN GESTOR CAMPO; do
+                echo "IGNIS_VALIDATION_PASSWORD_${role}=$(account_secret)"
+            done
         } > "$STATE"
     fi
     set -a
     # shellcheck disable=SC1090
     source "$STATE"
     set +a
+    # The database password reaches PostGIS as a Compose secret file and the API
+    # as a full URL assembled here, so no credential pattern lives in compose.yml.
+    if [[ ! -f "$DB_SECRET" ]]; then
+        (umask 077 && printf '%s' "$IGNIS_LOCAL_DB_PASSWORD" > "$DB_SECRET")
+    fi
+    IGNIS_LOCAL_DATABASE_URL="$(printf '%s://%s:%s@%s/%s' \
+        postgresql+asyncpg ignis "$IGNIS_LOCAL_DB_PASSWORD" db:5432 ignis_validation)"
+    export IGNIS_LOCAL_DATABASE_URL
 }
 
 wait_http() {
@@ -155,14 +170,21 @@ case "$cmd" in
         load_state
         WEB_DIR="${IGNIS_WEB_DIR:-$HERE/../../../ignis-fire-watch}"
         echo "==> Playwright contra $WEB (API $API) — dados reais do PostGIS desta pilha"
-        (cd "$WEB_DIR" &&             IGNIS_WEB_URL=$WEB IGNIS_API_URL=$API             IGNIS_E2E_PASSWORD_ADMIN=$IGNIS_VALIDATION_PASSWORD_ADMIN             IGNIS_E2E_PASSWORD_GESTOR=$IGNIS_VALIDATION_PASSWORD_GESTOR             IGNIS_E2E_PASSWORD_CAMPO=$IGNIS_VALIDATION_PASSWORD_CAMPO             npx playwright test "${@:2}")
+        (
+            cd "$WEB_DIR"
+            export IGNIS_WEB_URL=$WEB IGNIS_API_URL=$API
+            export IGNIS_E2E_PASSWORD_ADMIN=$IGNIS_VALIDATION_PASSWORD_ADMIN
+            export IGNIS_E2E_PASSWORD_GESTOR=$IGNIS_VALIDATION_PASSWORD_GESTOR
+            export IGNIS_E2E_PASSWORD_CAMPO=$IGNIS_VALIDATION_PASSWORD_CAMPO
+            ./node_modules/.bin/playwright test "${@:2}"
+        )
         ;;
     stop) load_state; "${COMPOSE[@]}" stop ;;
     reset)
         load_state
         echo "==> Removendo containers e o volume ignis-validation_pgdata (somente desta pilha)"
         "${COMPOSE[@]}" --profile tools down --volumes --remove-orphans
-        rm -f "$STATE" "$HERE/.last-ingest.json"
+        rm -f "$STATE" "$DB_SECRET" "$HERE/.last-ingest.json"
         ;;
     *) sed -n '2,12p' "$0"; exit 64 ;;
 esac

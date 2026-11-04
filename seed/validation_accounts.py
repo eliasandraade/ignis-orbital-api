@@ -25,8 +25,8 @@ ACCOUNTS = (
 ALLOWED_ENVS = ("development", "test")
 
 
-class RefusedError(SystemExit):
-    pass
+class RefusedError(Exception):
+    """Not a local validation stack: nothing is created."""
 
 
 def ensure_local_environment(environ=os.environ) -> None:
@@ -91,4 +91,8 @@ async def _main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(_main()))
+    try:
+        sys.exit(asyncio.run(_main()))
+    except RefusedError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(2)

@@ -15,15 +15,15 @@ router = APIRouter(prefix="/api/v1/jurisdictions", tags=["jurisdictions"])
 
 _GEOJSON_CACHE: dict[str, str] = {}
 _GEOJSON_CACHE_MAX = 16
-_NOT_LOADED = {
-    503: {"description": "Malha oficial ainda não importada (python -m seed.jurisdictions)"}
-}
 
 
 @router.get(
     "/municipalities",
     dependencies=[Depends(rate_limit("jurisdictions", limit=60, window_seconds=60))],
-    responses={**_NOT_LOADED, 422: {"description": "Filtro inválido"}},
+    responses={
+        503: {"description": "Malha oficial ainda não importada"},
+        422: {"description": "Filtro inválido"},
+    },
 )
 async def list_municipalities(
     observed_from: datetime | None = Query(None, alias="from"),
@@ -53,8 +53,8 @@ async def list_municipalities(
     "/geojson",
     dependencies=[Depends(rate_limit("jurisdictions-geojson", limit=30, window_seconds=60))],
     responses={
-        **_NOT_LOADED,
         200: {"content": {"application/geo+json": {}}, "description": "FeatureCollection"},
+        503: {"description": "Malha oficial ainda não importada"},
     },
 )
 async def jurisdictions_geojson(

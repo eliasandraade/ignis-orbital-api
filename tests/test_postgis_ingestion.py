@@ -366,7 +366,7 @@ async def test_killed_process_run_is_recovered_by_the_next_round(clean_orbital, 
         await asyncio.sleep(0.2)
     assert recovered == [run_id]
     result = await make_round(engine, [StubProvider(ok)]).run()
-    assert result.runs[0].status == "ok"
+    assert (result.runs[0].status, result.runs[0].error_code) == ("ok", None)
     runs = await runs_by_product(engine)
     assert runs["VIIRS_NOAA20_NRT"].status == "ok"
     async with AsyncSession(engine) as session:

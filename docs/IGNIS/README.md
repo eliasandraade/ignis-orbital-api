@@ -23,6 +23,9 @@ O inventário de telas fica no repositório do frontend.
 | 15 | [PHASE-1-EXECUTION-PLAN.md](PHASE-1-EXECUTION-PLAN.md) | backend | Plano de execução da Fase 1: INPE/FIRMS, PostGIS, mapa do Ceará |
 | 16 | [SPRINT-1.1-DELIVERY.md](SPRINT-1.1-DELIVERY.md) | backend | Sprint 1.1: tabelas geoespaciais, malha oficial IBGE 2025 do Ceará, contratos de ingestão, evidências |
 | 17 | [SPRINT-1.2-DELIVERY.md](SPRINT-1.2-DELIVERY.md) | backend | Sprint 1.2: ingestão real NASA FIRMS e INPE, worker agendado, recuperação por *lease*, API administrativa |
+| 18 | [READY-FOR-HUMAN-VALIDATION.md](READY-FOR-HUMAN-VALIDATION.md) | backend | **Estado para validação humana** (Sprints 1.3/1.4): o que está pronto, parcial e indisponível; classificação final |
+| 19 | [HUMAN-VALIDATION-GUIDE.md](HUMAN-VALIDATION-GUIDE.md) | backend | Guia do avaliador: subir a pilha local, jornada, falhas, integridade, E2E e checklist de aceitação |
+| 20 | [HUMAN-VALIDATION-RESULTS.md](HUMAN-VALIDATION-RESULTS.md) | backend | Testes realmente executados, evidências, defeitos encontrados e corrigidos, limitações |
 
 ## Repositórios
 

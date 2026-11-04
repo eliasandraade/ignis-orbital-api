@@ -246,7 +246,8 @@ async def test_stats_are_consistent_with_the_list(api):
     )
     assert full["municipalities_with_detections"] == expected[0]
     counts = [m["count"] for m in full["top_municipalities"]]
-    assert counts == sorted(counts, reverse=True) and len(counts) <= 10
+    assert counts == sorted(counts, reverse=True)
+    assert len(counts) <= 10
 
 
 # --- jurisdictions ----------------------------------------------------------------------------
@@ -279,7 +280,8 @@ async def test_geojson_is_official_and_cacheable(api):
     assert feature["geometry"]["type"] in ("Polygon", "MultiPolygon")
     ring = feature["geometry"]["coordinates"][0]
     lng, lat = ring[0][0] if feature["geometry"]["type"] == "MultiPolygon" else ring[0]
-    assert -38.7 < lng < -38.3 and -3.9 < lat < -3.6  # WGS 84 lon/lat order
+    assert -38.7 < lng < -38.3  # WGS 84 lon/lat order
+    assert -3.9 < lat < -3.6
     cached = await client.get(
         "/api/v1/jurisdictions/geojson", headers={"If-None-Match": response.headers["etag"]}
     )

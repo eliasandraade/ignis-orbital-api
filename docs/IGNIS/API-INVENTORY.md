@@ -92,37 +92,40 @@ Em todos os endpoints de domínio, o banco de demonstração contém dados do **
 |---|---|---|---|---|
 | GET | `/api/v1/environment/weather-risk?lat&lng` | — | Externo (Open-Meteo) | `source_status ∈ live, cached, unavailable`; cache 60 min por processo. **Rate limit 60/min/IP** |
 | GET | `/api/v1/geocoding/reverse?lat&lng` | — | Externo (Nominatim) | Cache por grade de cerca de 111 m. **Rate limit 30/min/IP**. Sem consumidor na UI |
-| GET | `/api/v1/orbital-alerts` | — | Externo (NASA FIRMS) | Contrato abaixo. **Rate limit 60/min/IP** |
+| GET | `/api/v1/orbital-alerts` | — | **PostGIS** (Sprint 1.3) | Focos persistidos com filtros `from`, `to`, `source`, `satellite`, `jurisdiction`, `bbox`, `page`, `size` ≤ 5000. **Rate limit 60/min/IP**. Nunca consulta NASA/INPE |
+| GET | `/api/v1/orbital-alerts/sources` | — | PostGIS | Estado por fonte e produto: `live`, `stale`, `degraded`, `unavailable`, `disabled`, `never_ingested`; origem `live` ou `fixture` |
+| GET | `/api/v1/orbital-alerts/stats` | — | PostGIS | Totais, municípios com focos, por fonte, satélite e dia, top 10 municípios (mesmos filtros) |
+| GET | `/api/v1/orbital-alerts/{id}` | — | PostGIS | Um foco, com `raw` (linha original do provedor). 404 se não existe |
+| GET | `/api/v1/jurisdictions/municipalities` | — | PostGIS | Os 184 municípios (IBGE 2025) com contagem de focos na janela; 503 se a malha não foi importada |
+| GET | `/api/v1/jurisdictions/geojson` | — | PostGIS | `level=state` ou `municipality`; `tolerance` (0 a 0,01°, só para exibição); ETag e cache de 1 h |
 | POST | `/api/v1/orbital-alerts/ingest` | **admin** | Real (Sprint 1.2) | **202** com as execuções criadas; processamento em segundo plano |
 | GET | `/api/v1/orbital-alerts/ingestion-runs` | **admin** | Real (Sprint 1.2) | Últimas execuções (`limit` ≤ 100) |
 | GET | `/api/v1/orbital-alerts/ingestion-runs/{run_id}` | **admin** | Real (Sprint 1.2) | Estado verificável de uma execução; 404 se não existe |
 
-### Contrato `GET /api/v1/orbital-alerts` (Sprint 0)
+### Contrato `GET /api/v1/orbital-alerts` (Sprint 1.3)
 
-```jsonc
-{
-  "items": [ /* OrbitalAlert */ ],
-  "total": 0,
-  "source_status": "live | cached | demo | disabled_missing_api_key | unavailable",
-  "data_origin": "nasa_firms | demo | none",   // novo
-  "persisted": false,                           // novo — sempre false nesta versão
-  "fetched_at": "ISO-8601 | null",              // novo — quando a NASA foi consultada
-  "cached_at": "ISO-8601 | null",               // preenchido quando source_status=cached
-  "message": "string | null",                   // novo — motivo legível
-  "disclaimer": "anomalia térmica ≠ incêndio confirmado",  // novo
-  "since": null
-}
-```
+Lê só `orbital_detections` e `ingestion_runs`. As definições estão em `app/orbital/read_schemas.py`.
 
-| `source_status` | `items` | Significado |
-|---|---|---|
-| `live` | dados NASA | Consultado na NASA nesta requisição |
-| `cached` | dados NASA | Consultado antes (`cached_at`/`fetched_at`), dentro do TTL |
-| `demo` | fictícios, `is_demo=true` | Só com `ORBITAL_ALERTS_DEMO_MODE=true` |
-| `disabled_missing_api_key` | `[]` | `NASA_FIRMS_MAP_KEY` ausente |
-| `unavailable` | `[]` | Falha de rede/HTTP ou corpo não-CSV; backoff de 5 min |
+**Cada item traz:**
+- origem: `source`, `product`, `satellite`, `instrument`;
+- horários: `observed_at` (satélite, UTC) e `ingested_at` (gravação no IGNIS);
+- posição: `lat` e `lng` exatamente como gravados, e `jurisdiction` (código IBGE e nome);
+- campos do sensor: `confidence` (classe VIIRS), `confidence_pct` (MODIS), `frp_mw`, `brightness_k` com `brightness_channel`, e `daynight`;
+- identificadores: `provider_record_id` e `ingestion_run_id`;
+- `persisted: true`.
 
-`OrbitalAlert` ganhou `is_demo: bool`. O `id` agora é determinístico (UUIDv5 de lat, lng, data, hora e satélite).
+**A página traz:**
+- `total`, `page`, `size`, `pages`;
+- `truncated`, quando há mais focos do que os devolvidos;
+- `filters`, com a janela efetivamente aplicada (padrão: últimos 7 dias; máximo 92);
+- `sources`, a situação de cada fonte (ver `/sources`);
+- `data_origin: "postgis"` e `disclaimer`.
+
+**Como ler `items` vazio:**
+- com a fonte `live`, significa que não houve foco;
+- com `disabled`, `unavailable` ou `never_ingested`, significa que não há dados para julgar.
+
+O estado `cached` da Sprint 0 deixou de existir, porque não há mais cache de chamada externa. Os estados possíveis estão na tabela acima.
 
 ### Contrato `POST /api/v1/orbital-alerts/ingest` (Sprint 1.2)
 

@@ -356,54 +356,72 @@ LEFT JOIN running r USING (source, product)
         ).all()
     )
     by_key = {(r.source, r.product): r for r in rows}
-    result = []
-    for source in SOURCES:
-        products = []
-        known = list(EXPECTED_PRODUCTS[source]) + sorted(
-            p for s, p in by_key if s == source and p not in EXPECTED_PRODUCTS[source]
+    return [
+        _source_status(source, by_key, latest.get(source), now, stale_after) for source in SOURCES
+    ]
+
+
+def _product_status(product: str, r, now: datetime, stale_after: timedelta) -> ProductStatus:
+    if r is None:
+        return ProductStatus(
+            product=product,
+            state="never_ingested",
+            last_attempt_at=None,
+            last_attempt_status=None,
+            last_error_code=None,
+            last_success_at=None,
+            running=False,
+            origin=None,
         )
-        for product in known:
-            r = by_key.get((source, product))
-            products.append(
-                ProductStatus(
-                    product=product,
-                    state=_product_state(
-                        r.status if r else None, r.last_ok if r else None, now, stale_after
-                    ),
-                    last_attempt_at=r.finished_at if r else None,
-                    last_attempt_status=r.status if r else None,
-                    last_error_code=r.error_code if r else None,
-                    last_success_at=r.last_ok if r else None,
-                    running=bool(r and r.running),
-                    origin=_origin(r.origin) if r else None,
-                )
-            )
-        state = _source_state([p.state for p in products])
-        successes = [p.last_success_at for p in products if p.last_success_at]
-        origins = {p.origin for p in products if p.origin}
-        result.append(
-            SourceStatus(
-                source=source,
-                label=SOURCE_LABELS[source],
-                state=state,
-                message=_SOURCE_MESSAGES[state]
-                + (
-                    " Amostra histórica pública (fixture), não dados atuais."
-                    if "fixture" in origins
-                    else ""
-                ),
-                last_success_at=max(successes) if successes else None,
-                latest_observation_at=latest.get(source),
-                stale_after_minutes=int(stale_after.total_seconds() // 60),
-                origin="fixture" if "fixture" in origins else ("live" if origins else None),
-                products=products,
-            )
-        )
-    return result
+    return ProductStatus(
+        product=product,
+        state=_product_state(r.status, r.last_ok, now, stale_after),
+        last_attempt_at=r.finished_at,
+        last_attempt_status=r.status,
+        last_error_code=r.error_code,
+        last_success_at=r.last_ok,
+        running=bool(r.running),
+        origin=_origin(r.origin),
+    )
+
+
+def _source_status(source, by_key, latest_observation, now, stale_after) -> SourceStatus:
+    extra = sorted(
+        product
+        for (s, product) in by_key
+        if s == source and product not in EXPECTED_PRODUCTS[source]
+    )
+    products = [
+        _product_status(product, by_key.get((source, product)), now, stale_after)
+        for product in [*EXPECTED_PRODUCTS[source], *extra]
+    ]
+    state = _source_state([p.state for p in products])
+    successes = [p.last_success_at for p in products if p.last_success_at]
+    origins = {p.origin for p in products if p.origin}
+    fixture = "fixture" in origins
+    message = _SOURCE_MESSAGES[state]
+    if fixture:
+        message += " Amostra histórica pública (fixture), não dados atuais."
+    origin = None
+    if origins:
+        origin = "fixture" if fixture else "live"
+    return SourceStatus(
+        source=source,
+        label=SOURCE_LABELS[source],
+        state=state,
+        message=message,
+        last_success_at=max(successes) if successes else None,
+        latest_observation_at=latest_observation,
+        stale_after_minutes=int(stale_after.total_seconds() // 60),
+        origin=origin,
+        products=products,
+    )
 
 
 def _origin(value: str | None):
-    return "fixture" if value == "fixture" else ("live" if value else None)
+    if value == "fixture":
+        return "fixture"
+    return "live" if value else None
 
 
 # --- jurisdictions ----------------------------------------------------------------------
