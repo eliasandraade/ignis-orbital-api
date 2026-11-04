@@ -143,6 +143,9 @@ class InpeProvider:
         self,
         *,
         enabled: bool = True,
+        # "fixture": the files are a documented historical public sample served
+        # locally (validation without network), never presented as current data.
+        origin: str = "live",
         base_url: str = (
             "https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil"
         ),
@@ -153,6 +156,7 @@ class InpeProvider:
         sleep: Sleep = asyncio.sleep,
     ):
         self._enabled = enabled
+        self._origin = origin
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._policy = policy or RetryPolicy()
@@ -185,7 +189,11 @@ class InpeProvider:
             for f in ((previous or {}).get("files") or [])
             if f.get("etag") and f.get("status") in (200, 304)
         }
-        provenance: dict[str, Any] = {"endpoint": self._base_url, "files": []}
+        provenance: dict[str, Any] = {
+            "origin": self._origin,
+            "endpoint": self._base_url,
+            "files": [],
+        }
         detections: list[NormalizedDetection] = []
         rejected = 0
         try:

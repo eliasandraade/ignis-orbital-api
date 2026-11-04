@@ -1,7 +1,8 @@
 import logging
 import uuid
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -12,12 +13,12 @@ from app.core.rate_limit import rate_limit
 from app.database import engine as app_engine
 from app.database import get_db
 from app.dependencies import require_role
-from app.integrations.nasa_firms.schemas import OrbitalAlertListResponse
-from app.integrations.nasa_firms.service import list_alerts
+from app.orbital import queries
 from app.orbital.contracts import DetectionProvider
 from app.orbital.ingestion import IngestionRound
 from app.orbital.model import IngestionRun
 from app.orbital.providers import SOURCES, providers_from_settings
+from app.orbital.read_schemas import DetectionDetail, DetectionPage, DetectionStats, SourceStatus
 from app.orbital.schemas import IngestAccepted, IngestionRunRead, IngestRequest, StartedRun
 
 logger = logging.getLogger("ignis.ingestion")
@@ -32,23 +33,87 @@ def get_ingestion_providers() -> list[DetectionProvider]:
     return providers_from_settings(get_settings())
 
 
-@router.get(
-    "",
-    dependencies=[Depends(rate_limit("orbital-alerts", limit=60, window_seconds=60))],
+def _filters(
+    observed_from: datetime | None,
+    observed_to: datetime | None,
+    source: str | None,
+    satellite: str | None,
+    jurisdiction: str | None,
+    bbox: str | None,
+) -> queries.Filters:
+    try:
+        return queries.build_filters(
+            observed_from=observed_from,
+            observed_to=observed_to,
+            source=source,
+            satellite=satellite,
+            jurisdiction=jurisdiction,
+            bbox=bbox,
+        )
+    except queries.FilterError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _stale_after() -> timedelta:
+    return timedelta(minutes=get_settings().orbital_stale_after_minutes)
+
+
+FromQ = Query(
+    None, alias="from", description="Início da observação (ISO 8601); padrão: to - 7 dias"
 )
-async def get_orbital_alerts() -> OrbitalAlertListResponse:
-    """List orbital heat-spot alerts (satellite thermal anomalies, not confirmed fires).
+ToQ = Query(None, alias="to", description="Fim da observação (ISO 8601, exclusivo); padrão: agora")
+SourceQ = Query(None, description="NASA_FIRMS ou INPE_QUEIMADAS")
+SatelliteQ = Query(None, max_length=64)
+JurisdictionQ = Query(None, description="Código IBGE de 7 dígitos do município")
+BBoxQ = Query(None, description="oeste,sul,leste,norte (graus, SRID 4326)")
+_BAD_FILTER = {422: {"description": "Filtro inválido (janela, fonte, município ou bbox)"}}
+_PUBLIC_LIMIT = [Depends(rate_limit("orbital-alerts", limit=60, window_seconds=60))]
 
-    source_status:
-    - `live` / `cached`: NASA FIRMS data fetched now / earlier (see `fetched_at`).
-    - `demo`: fictitious items, only when ORBITAL_ALERTS_DEMO_MODE=true.
-    - `disabled_missing_api_key`: NASA_FIRMS_MAP_KEY absent — empty list.
-    - `unavailable`: NASA FIRMS failed — empty list.
 
-    This read endpoint never starts an ingestion run; reading from
-    orbital_detections replaces it in Sprint 1.3.
+@router.get("", dependencies=_PUBLIC_LIMIT, responses=_BAD_FILTER)
+async def get_orbital_alerts(
+    observed_from: datetime | None = FromQ,
+    observed_to: datetime | None = ToQ,
+    source: str | None = SourceQ,
+    satellite: str | None = SatelliteQ,
+    jurisdiction: str | None = JurisdictionQ,
+    bbox: str | None = BBoxQ,
+    page: int = Query(1, ge=1, le=10_000),
+    size: int = Query(500, ge=1, le=queries.MAX_PAGE_SIZE),
+    db: AsyncSession = Depends(get_db),
+) -> DetectionPage:
+    """Persisted heat spots (satellite thermal anomalies, never confirmed fires).
+
+    Reads only PostgreSQL/PostGIS: it never calls NASA or INPE. `sources`
+    reports each provider's ingestion state separately from the observation
+    times of the detections (`observed_at`) and from when IGNIS stored them
+    (`ingested_at`). An empty `items` with a `live` source means "no detection
+    in the window"; with `disabled`, `unavailable` or `never_ingested` it
+    means "no data to judge".
     """
-    return await list_alerts()
+    f = _filters(observed_from, observed_to, source, satellite, jurisdiction, bbox)
+    return await queries.list_detections(db, f, page=page, size=size, stale_after=_stale_after())
+
+
+@router.get("/sources", dependencies=_PUBLIC_LIMIT)
+async def get_sources(db: AsyncSession = Depends(get_db)) -> list[SourceStatus]:
+    """Ingestion state of NASA FIRMS and INPE, product by product."""
+    return await queries.source_statuses(db, _stale_after())
+
+
+@router.get("/stats", dependencies=_PUBLIC_LIMIT, responses=_BAD_FILTER)
+async def get_stats(
+    observed_from: datetime | None = FromQ,
+    observed_to: datetime | None = ToQ,
+    source: str | None = SourceQ,
+    satellite: str | None = SatelliteQ,
+    jurisdiction: str | None = JurisdictionQ,
+    bbox: str | None = BBoxQ,
+    db: AsyncSession = Depends(get_db),
+) -> DetectionStats:
+    """Counts computed from the stored detections, with the same filters."""
+    f = _filters(observed_from, observed_to, source, satellite, jurisdiction, bbox)
+    return await queries.detection_stats(db, f, stale_after=_stale_after())
 
 
 async def _execute(ingestion: IngestionRound) -> None:
@@ -155,3 +220,19 @@ async def get_ingestion_run(
     if run is None:
         raise HTTPException(status_code=404, detail="Execução não encontrada")
     return IngestionRunRead.model_validate(run)
+
+
+# Last: "/{detection_id}" would otherwise shadow the literal paths above.
+@router.get(
+    "/{detection_id}",
+    dependencies=_PUBLIC_LIMIT,
+    responses={404: {"description": "Detecção não encontrada"}},
+)
+async def get_detection(
+    detection_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> DetectionDetail:
+    """One stored detection, with the provider's original row (`raw`)."""
+    detection = await queries.get_detection(db, detection_id)
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detecção não encontrada")
+    return detection

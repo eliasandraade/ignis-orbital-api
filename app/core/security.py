@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -7,6 +8,9 @@ from passlib.context import CryptContext
 from app.config import get_settings
 
 settings = get_settings()
+# passlib 1.7 reads bcrypt.__about__, removed in bcrypt 4.1, and logs the
+# harmless AttributeError with a traceback on first use; hashing is unaffected.
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

@@ -249,6 +249,7 @@ class FirmsProvider:
         date, days = day_range(window)
         area = ",".join(f"{v:g}" for v in bbox)
         provenance: dict[str, Any] = {
+            "origin": "live",
             "endpoint": "api/area/csv",
             "source_product": product,
             "area": area,

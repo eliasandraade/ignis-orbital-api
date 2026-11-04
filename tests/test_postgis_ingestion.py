@@ -366,7 +366,7 @@ async def test_killed_process_run_is_recovered_by_the_next_round(clean_orbital, 
         await asyncio.sleep(0.2)
     assert recovered == [run_id]
     result = await make_round(engine, [StubProvider(ok)]).run()
-    assert result.runs[0].status == "ok"
+    assert (result.runs[0].status, result.runs[0].error_code) == ("ok", None)
     runs = await runs_by_product(engine)
     assert runs["VIIRS_NOAA20_NRT"].status == "ok"
     async with AsyncSession(engine) as session:
@@ -736,3 +736,43 @@ async def test_sigterm_closes_the_runs_as_interrupted(clean_orbital, geo_databas
     runs = await runs_by_product(clean_orbital)
     assert {(r.status, r.error_code) for r in runs.values()} == {("error", "interrupted")}
     assert FAKE_KEY not in out
+
+
+def test_worker_ingests_the_documented_inpe_fixture(
+    clean_orbital, geo_database, monkeypatch, capsys
+):
+    """Validation without network: the historical sample is stored as what it is."""
+    from app.orbital import worker
+    from tests.orbital_support import INPE_SAMPLE
+
+    settings = _worker_settings(geo_database, nasa_firms_map_key="")
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+    assert worker.main(["--inpe-fixture", str(INPE_SAMPLE)]) == 0
+    first = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["runs"]
+    assert [(r["product"], r["status"]) for r in first] == [("FOCOS_DIARIO_BR", "ok")]
+    assert first[0]["records_inserted"] > 0
+    assert worker.main(["--inpe-fixture", str(INPE_SAMPLE)]) == 0  # same file again
+    again = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["runs"]
+    assert again[0]["records_inserted"] == 0
+    assert worker.main(["--inpe-fixture", "nao-existe.csv"]) == 3
+    assert worker.main(["--inpe-fixture", str(INPE_SAMPLE.parent / "README.md")]) == 3
+
+
+async def test_fixture_runs_are_marked_and_keep_original_times(clean_orbital, geo_database):
+    from app.orbital.worker import fixture_round_inputs
+    from tests.orbital_support import INPE_SAMPLE
+
+    providers, window = fixture_round_inputs(INPE_SAMPLE)
+    result = await IngestionRound(clean_orbital, providers, trigger="manual", window=window).run()
+    assert result.runs[0].status == "ok"
+    rows = await scalar(
+        clean_orbital,
+        "SELECT count(*) FROM ingestion_runs WHERE params->'provenance'->>'origin' = 'fixture'",
+    )
+    assert rows == 1
+    days = await scalar(
+        clean_orbital,
+        "SELECT string_agg(DISTINCT to_char(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), ',')"
+        " FROM orbital_detections",
+    )
+    assert days == "2026-11-03"  # the sample's own day, never "today"

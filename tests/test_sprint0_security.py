@@ -69,7 +69,8 @@ def test_cors_origins_accepts_documented_env_formats(monkeypatch, raw):
 
 def test_demo_modes_are_off_by_default():
     settings = Settings(_env_file=None)
-    assert settings.orbital_alerts_demo_mode is False
+    # Sprint 1.3: the orbital demo mode no longer exists (alerts come from PostGIS).
+    assert not hasattr(settings, "orbital_alerts_demo_mode")
     assert settings.trust_proxy_headers is False
 
 
@@ -171,6 +172,8 @@ def test_entrypoint_requires_explicit_app_env_and_skips_seed_safely():
     assert "migrate)" in script
     assert "MIGRATE_ON_START:-true" in script
     assert "SEED_DEMO_DATA" not in script
+    # The local validation stack may skip the demo seed; nothing may force it.
+    assert 'SKIP_DEMO_SEED:-false}" == "true"' in script
 
 
 # --- readiness does not leak driver errors -------------------------------------------

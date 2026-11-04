@@ -77,12 +77,18 @@ case "$ROLE" in
 
         # The demo seed creates users with published passwords. Python decides from
         # APP_ENV (development/test/demo only); staging/production are always skipped.
-        python -m seed --if-allowed
+        # SKIP_DEMO_SEED=true skips it even where allowed (human-validation stack).
+        # It can only turn the seed off, never on.
+        if [[ "${SKIP_DEMO_SEED:-false}" == "true" ]]; then
+            echo "==> [IGNIS Orbital API] Seed demonstrativo ignorado (SKIP_DEMO_SEED=true)."
+        else
+            python -m seed --if-allowed
+        fi
 
         echo "==> [IGNIS Orbital API] Iniciando servidor..."
         # --reload only for local development: a reachable deploy (demo/staging/production)
         # must never re-execute code written at runtime.
-        if [[ "$APP_ENV" == "development" ]]; then
+        if [[ "$APP_ENV" == "development" && "${UVICORN_RELOAD:-true}" == "true" ]]; then
             exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --reload
         else
             exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" \

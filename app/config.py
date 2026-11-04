@@ -117,8 +117,9 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_expire_minutes: int = Field(default=480, ge=5, le=1440)
 
-    # Fictitious orbital alerts are served only when explicitly enabled.
-    orbital_alerts_demo_mode: bool = False
+    # A source whose last successful ingestion is older than this is "stale".
+    # Three cron intervals (15 min) plus margin for the providers' own latency.
+    orbital_stale_after_minutes: int = Field(default=60, ge=5, le=10080)
 
     # Rate limiting (in-memory, per process). Behind a trusted reverse proxy the
     # client IP comes from CLIENT_IP_HEADER: Railway's edge overwrites

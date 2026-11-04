@@ -9,6 +9,10 @@ import httpx
 from app.orbital.contracts import TimeWindow
 
 FIXTURES = Path(__file__).parent / "fixtures" / "orbital"
+# The INPE sample ships in the image (local validation without network).
+INPE_SAMPLE = (
+    Path(__file__).parents[1] / "data" / "samples" / "inpe" / "focos_diario_br_20261103.csv"
+)
 FIRMS_PRODUCTS = ("VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT")
 FIXTURE_COUNTS = {
     "VIIRS_SNPP_NRT": 11,
@@ -26,7 +30,7 @@ FAKE_KEY = "f1rm5-test-key-0123456789abcdef"  # never a real credential
 
 def fixture_bytes(product: str) -> bytes:
     if product == "FOCOS_DIARIO_BR":
-        return (FIXTURES / "inpe_focos_diario_br_20261103.csv").read_bytes()
+        return INPE_SAMPLE.read_bytes()
     return (FIXTURES / f"firms_{product}.csv").read_bytes()
 
 
