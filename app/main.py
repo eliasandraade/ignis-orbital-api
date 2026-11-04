@@ -132,7 +132,9 @@ def create_app() -> FastAPI:
     app.include_router(resources_router)
     app.include_router(missions_router)
     app.include_router(evidence_router)
-    app.include_router(aurora_router)
+    # Assistente experimental: fora do produto operacional (404 em staging/produção).
+    if settings.aurora_enabled:
+        app.include_router(aurora_router)
     app.include_router(esg_router)
     app.include_router(audit_router)
     app.include_router(admin_stats_router)

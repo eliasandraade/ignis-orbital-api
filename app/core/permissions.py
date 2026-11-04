@@ -15,6 +15,10 @@ from fastapi.routing import APIRoute
 from app.core.enums import UserRole
 from app.dependencies import ROLE_LEVELS, get_current_user
 
+# Access levels that are not a role (labels shown in the cockpit matrix).
+PUBLIC = "público"
+AUTHENTICATED = "autenticado"
+
 ROLE_LABELS: dict[str, str] = {
     UserRole.PUBLICO: "Público (cadastrado)",
     UserRole.CAMPO: "Equipe de campo",
@@ -38,7 +42,7 @@ class EndpointRule:
     path: str
     tag: str
     summary: str
-    access: str  # "público", "autenticado" or a role value (minimum level)
+    access: str  # PUBLIC, AUTHENTICATED or a role value (minimum level)
 
 
 def _minimum_role(route: APIRoute) -> str:
@@ -47,7 +51,7 @@ def _minimum_role(route: APIRoute) -> str:
 
 def _minimum_role_from(dependant) -> str:
     """Walks the dependency tree: the strictest require_role wins."""
-    access = "público"
+    access = PUBLIC
     for dependency in dependant.dependencies:
         call = dependency.call
         closure = getattr(call, "__closure__", None) or ()
@@ -58,12 +62,12 @@ def _minimum_role_from(dependant) -> str:
             if level is not None:
                 return next(r for r, lvl in ROLE_LEVELS.items() if lvl == level).value
         if call is get_current_user:
-            access = "autenticado"
+            access = AUTHENTICATED
         deeper = _minimum_role_from(dependency)
-        if deeper not in ("público", "autenticado"):
+        if deeper not in (PUBLIC, AUTHENTICATED):
             return deeper
-        if deeper == "autenticado":
-            access = "autenticado"
+        if deeper == AUTHENTICATED:
+            access = AUTHENTICATED
     return access
 
 
@@ -100,8 +104,8 @@ def endpoint_matrix(app: FastAPI) -> list[EndpointRule]:
 
 
 def allowed(access: str, role: str) -> bool:
-    if access == "público":
+    if access == PUBLIC:
         return True
-    if access == "autenticado":
+    if access == AUTHENTICATED:
         return True
     return ROLE_LEVELS[UserRole(role)] >= ROLE_LEVELS[UserRole(access)]

@@ -297,7 +297,7 @@ async def sources(db: AsyncSession = Depends(get_db), current_user=_ADMIN) -> di
     }
 
 
-@router.get("/ingestion-runs", response_model=Page[IngestionRunRead], responses=_DENIED)
+@router.get("/ingestion-runs", responses=_DENIED)
 async def ingestion_runs(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),

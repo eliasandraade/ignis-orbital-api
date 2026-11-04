@@ -11,10 +11,13 @@ import { createRailwayContext, project } from "railway/iac";
 import type { ResourceNode, ServiceNode } from "railway/iac";
 
 import program, {
+  API_PORT,
   BRANCHES,
-  ENABLE_ORBITAL_INGEST_JOB,
+  INGEST,
   INGEST_CRON,
   POSTGIS_IMAGE,
+  PRODUCTION_DOMAIN,
+  REGION,
   environmentOf,
   ingestJob,
 } from "./railway.ts";
@@ -23,6 +26,9 @@ const root = new URL("../", import.meta.url);
 const entrypoint = readFileSync(new URL("scripts/entrypoint.sh", root), "utf8");
 const health = readFileSync(new URL("app/health/router.py", root), "utf8");
 const ciWorkflow = readFileSync(new URL(".github/workflows/ci.yml", root), "utf8");
+const alembicEnv = readFileSync(new URL("alembic/env.py", root), "utf8");
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 async function resourcesFor(environment: string): Promise<ResourceNode[]> {
   const def = await program(createRailwayContext({ environment }), project);
@@ -55,41 +61,51 @@ const check = (name: string, fn: () => void) => {
 
 for (const env of ["staging", "production"] as const) {
   const resources = await resourcesFor(env);
-  const api = svc(resources, "api");
-  const web = svc(resources, "web");
-  const postgis = svc(resources, "postgis");
+  const api = svc(resources, "ignis-api");
+  const web = svc(resources, "ignis-web");
+  const postgis = svc(resources, "ignis-postgis");
+  const services = resources.filter((r) => r.type === "service") as ServiceNode[];
+  const fromGithub = services.filter((n) => n.name !== "ignis-postgis");
 
-  check(`${env}: only api, web, postgis and its volume (ingestion job off)`, () => {
-    assert.equal(ENABLE_ORBITAL_INGEST_JOB, false, "ingestion job needs owner authorisation");
-    assert.deepEqual(resources.map((r) => r.address).sort(), [
-      "service.api",
-      "service.postgis",
-      "service.web",
-      "volume.postgis-data",
-    ]);
+  check(`${env}: resources (ingestion only where authorised, never in production yet)`, () => {
+    const expected = [
+      "service.ignis-api",
+      "service.ignis-postgis",
+      "service.ignis-web",
+      "volume.ignis-postgis-data",
+      ...(INGEST[env].service ? ["service.ignis-ingest"] : []),
+    ].sort();
+    assert.deepEqual(resources.map((r) => r.address).sort(), expected);
+    assert.equal(INGEST.production.cron, false, "production cron needs owner authorisation");
+    assert.equal(INGEST.production.service, false, "production ingestion needs owner authorisation");
   });
 
   check(`${env}: deploys wait for GitHub Actions and track the environment branch`, () => {
-    for (const [node, expected] of [
-      [api, BRANCHES[env].api],
-      [web, BRANCHES[env].web],
-    ] as const) {
+    for (const node of fromGithub) {
       assert.equal(node.source?.checkSuites, true, `${node.name} must wait for CI`);
-      assert.equal(node.source?.branch, expected);
     }
-    if (env === "production") {
-      // A merge to a default branch must never reach production.
-      assert.ok(!["main", "master"].includes(api.source?.branch ?? ""));
-      assert.ok(!["main", "master"].includes(web.source?.branch ?? ""));
+    assert.equal(api.source?.branch, BRANCHES[env].api);
+    assert.equal(web.source?.branch, BRANCHES[env].web);
+    // Neither environment deploys a default or feature branch directly.
+    for (const b of Object.values(BRANCHES[env])) {
+      assert.ok(!["main", "master"].includes(b) && !b.startsWith("feat/"), b);
+    }
+    assert.deepEqual(BRANCHES.production, { api: "production", web: "production" });
+  });
+
+  check(`${env}: every service runs in the chosen region`, () => {
+    for (const node of services) {
+      assert.equal(node.deploy?.region, REGION, `${node.name} region`);
     }
   });
 
-  check(`${env}: API migrates in pre-deploy, not on every replica start`, () => {
+  check(`${env}: API migrates in pre-deploy (serialised), not on every replica start`, () => {
     assert.deepEqual(api.deploy?.preDeployCommand, ["/app/scripts/entrypoint.sh migrate"]);
     assert.equal(api.deploy?.startCommand, "/app/scripts/entrypoint.sh api");
     assert.equal(literal(api, "MIGRATE_ON_START"), "false");
     assert.match(entrypoint, /^\s+migrate\)$/m);
     assert.match(entrypoint, /^\s+api\)$/m);
+    assert.match(alembicEnv, /pg_advisory_xact_lock/);
   });
 
   check(`${env}: healthchecks point to real readiness endpoints`, () => {
@@ -98,15 +114,18 @@ for (const env of ["staging", "production"] as const) {
     assert.equal(web.deploy?.healthcheckPath, "/healthz");
   });
 
-  check(`${env}: APP_ENV matches the Railway environment`, () => {
-    assert.equal(literal(api, "APP_ENV"), env);
+  check(`${env}: APP_ENV matches the Railway environment; no demo data`, () => {
+    for (const node of services.filter((n) => n.variables?.APP_ENV)) {
+      assert.equal(literal(node, "APP_ENV"), env);
+    }
+    assert.equal(literal(api, "ORBITAL_ALERTS_DEMO_MODE"), "false");
+    assert.equal(literal(api, "SKIP_DEMO_SEED"), "true");
   });
 
   check(`${env}: secrets are never literals in the repository`, () => {
     preserved(api, "JWT_SECRET_KEY");
-    preserved(api, "NASA_FIRMS_MAP_KEY");
     preserved(postgis, "POSTGRES_PASSWORD");
-    for (const node of [api, web, postgis]) {
+    for (const node of services) {
       for (const [key, value] of Object.entries(node.variables ?? {})) {
         if (/SECRET|PASSWORD|TOKEN|KEY/.test(key)) {
           assert.notEqual(value.type, "literal", `${node.name}.${key} is a literal secret`);
@@ -115,43 +134,63 @@ for (const env of ["staging", "production"] as const) {
     }
   });
 
-  check(`${env}: database is private (no domain, no TCP proxy) and pinned to CI's PostGIS`, () => {
+  check(`${env}: database and API are private; only ignis-web is public`, () => {
     assert.equal(postgis.source?.image, POSTGIS_IMAGE);
-    assert.equal(postgis.networking, undefined);
-    assert.match(ciWorkflow, new RegExp(POSTGIS_IMAGE.replace(/[.]/g, "\\.")));
+    for (const node of services.filter((n) => n.name !== "ignis-web")) {
+      assert.equal(node.networking, undefined, `${node.name} must have no domain/TCP proxy`);
+    }
+    assert.match(ciWorkflow, new RegExp(escape(POSTGIS_IMAGE)));
     assert.match(String(literal(postgis, "DATABASE_URL")), /RAILWAY_PRIVATE_DOMAIN/);
     assert.deepEqual(api.variables?.DATABASE_URL, {
       type: "reference",
-      resource: "service.postgis",
+      resource: "service.ignis-postgis",
       output: "DATABASE_URL",
     });
   });
 
-  check(`${env}: CORS and API URL are HTTPS Railway domains of this environment`, () => {
-    assert.equal(literal(api, "CORS_ORIGINS"), "https://${{web.RAILWAY_PUBLIC_DOMAIN}}");
-    assert.equal(literal(web, "VITE_API_URL"), "https://${{api.RAILWAY_PUBLIC_DOMAIN}}");
-    assert.equal(literal(web, "VITE_USE_API"), "true");
-    assert.equal(literal(api, "ORBITAL_ALERTS_DEMO_MODE"), "false");
+  check(`${env}: same-origin — web proxies to the API's private address`, () => {
+    assert.equal(literal(web, "VITE_API_URL"), "same-origin");
+    assert.equal(
+      literal(web, "IGNIS_API_UPSTREAM"),
+      "http://${{ignis-api.RAILWAY_PRIVATE_DOMAIN}}:${{ignis-api.PORT}}",
+    );
+    assert.equal(literal(api, "PORT"), API_PORT);
+    assert.equal(web.variables?.VITE_USE_API, undefined);
   });
 
-  check(`${env}: client IP comes from Railway's X-Real-IP`, () => {
+  check(`${env}: official domain only on production's ignis-web`, () => {
+    const domains = JSON.stringify(web.networking ?? {});
+    if (env === "production") {
+      assert.match(domains, new RegExp(escape(PRODUCTION_DOMAIN)));
+      assert.equal(literal(api, "CORS_ORIGINS"), `https://${PRODUCTION_DOMAIN}`);
+    } else {
+      assert.doesNotMatch(domains, /andradesystems/);
+      assert.equal(literal(api, "CORS_ORIGINS"), "https://${{ignis-web.RAILWAY_PUBLIC_DOMAIN}}");
+    }
+  });
+
+  check(`${env}: one replica, one worker (in-memory rate limit stays exact)`, () => {
+    assert.equal(api.deploy?.numReplicas, 1);
+    assert.equal(literal(api, "WEB_CONCURRENCY"), "1");
     assert.equal(literal(api, "TRUST_PROXY_HEADERS"), "true");
     assert.equal(literal(api, "CLIENT_IP_HEADER"), "x-real-ip");
   });
 
-  check(`${env}: ingestion job (ready, off) runs one round per cron tick`, () => {
-    const job = ingestJob(env, BRANCHES[env].api, "postgresql://contract-check");
-    assert.equal(job.deploy?.startCommand, "/app/scripts/entrypoint.sh ingest");
-    assert.match(entrypoint, /^\s+ingest\)$/m);
-    assert.equal(job.deploy?.cronSchedule, INGEST_CRON);
+  check(`${env}: ingestion service runs one round per run, cron only when enabled`, () => {
+    for (const cron of [false, true]) {
+      const job = ingestJob(env, BRANCHES[env].api, "postgresql://contract-check", cron);
+      assert.equal(job.deploy?.startCommand, "/app/scripts/entrypoint.sh ingest");
+      assert.match(entrypoint, /^\s+ingest\)$/m);
+      assert.equal(job.deploy?.cronSchedule, cron ? INGEST_CRON : undefined);
+      assert.equal(job.deploy?.restartPolicyType, "NEVER");
+      assert.equal(job.source?.checkSuites, true);
+      assert.equal(job.source?.branch, BRANCHES[env].api);
+      assert.equal(literal(job, "APP_ENV"), env);
+      assert.equal(literal(job, "MIGRATE_ON_START"), "false");
+      assert.equal(job.networking, undefined);
+      preserved(job, "JWT_SECRET_KEY");
+    }
     assert.equal(INGEST_CRON, "*/15 * * * *");
-    assert.equal(job.deploy?.restartPolicyType, "NEVER");
-    assert.equal(job.source?.checkSuites, true);
-    assert.equal(job.source?.branch, BRANCHES[env].api);
-    assert.equal(literal(job, "APP_ENV"), env);
-    assert.equal(literal(job, "MIGRATE_ON_START"), "false");
-    preserved(job, "NASA_FIRMS_MAP_KEY");
-    preserved(job, "JWT_SECRET_KEY");
   });
 }
 

@@ -34,6 +34,10 @@ from app.users.schemas import (
     UserAdminRead,
 )
 
+# Audit actions referenced in several places (step-up failure and outcome).
+ACTION_ROLE_CHANGE = "user.role_change"
+ACTION_PASSWORD_RESET = "user.password_reset"
+
 ADMIN = UserRole.ADMIN.value
 # Transaction-scoped advisory lock taken by every change that can shrink the set
 # of administrators (role, status). Serialises them: two admins demoting each
@@ -268,7 +272,7 @@ async def change_role(
     await _serialize_admin_changes(db, actor)
     user = await _lock_user(db, user_id)
     _check_version(user, body.expected_version)
-    await _step_up(db, actor, body.confirm_password, "user.role_change", user)
+    await _step_up(db, actor, body.confirm_password, ACTION_ROLE_CHANGE, user)
     new_role = body.role.value
     if new_role == user.role:
         return user
@@ -277,7 +281,7 @@ async def change_role(
             db,
             actor,
             user,
-            "user.role_change",
+            ACTION_ROLE_CHANGE,
             "self",
             "Você não pode alterar o próprio papel. Peça a outro administrador.",
         )
@@ -290,7 +294,7 @@ async def change_role(
             db,
             actor,
             user,
-            "user.role_change",
+            ACTION_ROLE_CHANGE,
             "last_admin",
             "Este é o último administrador ativo: promova outro antes de rebaixá-lo.",
         )
@@ -353,13 +357,13 @@ async def reset_password(
 ) -> User:
     user = await _lock_user(db, user_id)
     _check_version(user, body.expected_version)
-    await _step_up(db, actor, body.confirm_password, "user.password_reset", user)
+    await _step_up(db, actor, body.confirm_password, ACTION_PASSWORD_RESET, user)
     if user.id == actor.id:
         await _deny(
             db,
             actor,
             user,
-            "user.password_reset",
+            ACTION_PASSWORD_RESET,
             "self",
             'Para a própria senha, use "Trocar senha" no seu perfil.',
         )
@@ -369,7 +373,7 @@ async def reset_password(
     await db.flush()
     await log_action(
         db,
-        "user.password_reset",
+        ACTION_PASSWORD_RESET,
         "User",
         str(user.id),
         actor_name=actor.name,

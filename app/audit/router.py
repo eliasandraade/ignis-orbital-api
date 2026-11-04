@@ -40,7 +40,6 @@ def _filters(
 
 @router.get(
     "/audit-logs",
-    response_model=Page[AuditLogRead],
     responses={
         401: {"description": "Sem autenticação"},
         403: {"description": "Somente administrador"},

@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     # the spec is served to administrators at /api/v1/admin/openapi.json.
     api_docs_public: bool | None = None
 
+    # Experimental rule-based assistant ("Aurora", /api/v1/aurora/*). Not part of
+    # the operational product: unset ("auto") mounts it only outside
+    # staging/production, and operational environments cannot turn it on.
+    aurora_experimental: bool | None = None
+
     # A source whose last successful ingestion is older than this is "stale".
     # Three cron intervals (15 min) plus margin for the providers' own latency.
     orbital_stale_after_minutes: int = Field(default=60, ge=5, le=10080)
@@ -200,6 +205,12 @@ class Settings(BaseSettings):
         if self.api_docs_public is None:
             return not self.is_operational
         return self.api_docs_public and not self.is_operational
+
+    @property
+    def aurora_enabled(self) -> bool:
+        if self.aurora_experimental is None:
+            return not self.is_operational
+        return self.aurora_experimental and not self.is_operational
 
     @property
     def demo_seed_allowed(self) -> bool:

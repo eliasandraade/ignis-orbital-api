@@ -1,6 +1,7 @@
 import asyncio
 from logging.config import fileConfig
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
@@ -28,6 +29,8 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+MIGRATION_LOCK_KEY = "ignis:alembic-upgrade"
+
 settings = get_settings()
 
 
@@ -51,6 +54,13 @@ def do_run_migrations(connection) -> None:
         include_schemas=True,
     )
     with context.begin_transaction():
+        # Two deploys overlapping (pre-deploy of each) must not migrate at the same
+        # time: the second waits here, then finds the schema already at head.
+        # Transaction-scoped, released on commit/rollback (also on a crash).
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+            {"k": MIGRATION_LOCK_KEY},
+        )
         context.run_migrations()
 
 
