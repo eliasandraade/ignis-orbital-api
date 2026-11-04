@@ -70,11 +70,12 @@ export const API_PORT = "8000";
  * Orbital ingestion (NASA FIRMS + INPE), entrypoint role `ingest`.
  *  - service: exists in the environment (a deploy runs one round, then exits);
  *  - cron:    re-runs every 15 minutes.
- * Staging: service first (manual round validated), cron after. Production: off
+ * Staging: manual rounds validated on 2026-11-04 (INPE ok, idempotent, source
+ * outage recorded as unavailable), then the cron was enabled. Production: off
  * until the owner authorises it after staging homologation.
  */
 export const INGEST: Record<IgnisEnvironment, { service: boolean; cron: boolean }> = {
-  staging: { service: true, cron: false },
+  staging: { service: true, cron: true },
   production: { service: false, cron: false },
 };
 export const INGEST_CRON = "*/15 * * * *";
