@@ -4,7 +4,7 @@ from app.core.rate_limit import rate_limit
 from app.integrations.openstreetmap.schemas import ReverseGeocodingResponse
 from app.integrations.openstreetmap.service import reverse_geocode
 
-router = APIRouter(prefix="/api/v1/geocoding", tags=["geocoding"])
+router = APIRouter(prefix="/api/v1/geocoding", tags=["geocodificação"])
 
 
 @router.get(

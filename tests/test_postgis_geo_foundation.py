@@ -61,14 +61,14 @@ def fresh_database():
 def test_migration_upgrade_downgrade_upgrade(fresh_database):
     postgis.alembic("upgrade", postgis.BASELINE_REVISION, database=fresh_database)
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a015 (head)" in postgis.alembic("current", database=fresh_database)
     postgis.alembic("downgrade", postgis.BASELINE_REVISION, database=fresh_database)
     out = postgis.run_module(
         "seed.jurisdictions", database=fresh_database
     )  # tables are gone: the importer must fail, not create them
     assert out.returncode != 0
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a015 (head)" in postgis.alembic("current", database=fresh_database)
 
 
 async def test_schema_matches_the_models(geo_engine):

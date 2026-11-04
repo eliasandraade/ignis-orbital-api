@@ -11,7 +11,7 @@ from app.dependencies import require_role
 from app.teams import service as teams_service
 from app.teams.schemas import FieldTeamCreate, FieldTeamRead, FieldTeamUpdate
 
-router = APIRouter(prefix="/api/v1/teams", tags=["teams"])
+router = APIRouter(prefix="/api/v1/teams", tags=["equipes"])
 
 
 @router.get("", response_model=Page[FieldTeamRead])

@@ -5,10 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "ignis-orbital-api"
 version = "0.1.0"
-description = "IGNIS Orbital API — Backend REST para monitoramento ambiental e proteção de áreas naturais"
+description = "IGNIS Orbital API (Andrade Systems): monitoramento de focos de calor e gestão de ocorrências ambientais"
 authors = [
-    { name = "Elias Sales de Freitas" },
-    { name = "João Vitor Bernardo" },
+    { name = "Andrade Systems" },
 ]
 readme = "README.md"
 requires-python = ">=3.12"

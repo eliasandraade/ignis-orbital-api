@@ -13,8 +13,9 @@ async def test_health_response_structure(client_no_db):
     data = response.json()
     assert data["status"] == "ok"
     assert data["service"] == "ignis-orbital-api"
-    assert "version" in data
-    assert "environment" in data
+    # Public endpoint: no deployment details.
+    assert "version" not in data
+    assert "environment" not in data
 
 
 @pytest.mark.asyncio

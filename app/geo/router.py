@@ -11,7 +11,7 @@ from app.database import get_db
 from app.orbital import queries
 from app.orbital.read_schemas import MunicipalityList
 
-router = APIRouter(prefix="/api/v1/jurisdictions", tags=["jurisdictions"])
+router = APIRouter(prefix="/api/v1/jurisdictions", tags=["jurisdições (IBGE)"])
 
 _GEOJSON_CACHE: dict[str, str] = {}
 _GEOJSON_CACHE_MAX = 16

@@ -24,6 +24,8 @@ def make_fake_user(role="gestor"):
     user.role = role
     user.team_id = None
     user.is_active = True
+    user.session_version = 0
+    user.must_change_password = False
     user.created_at = datetime.datetime.now(datetime.UTC)
     user.updated_at = user.created_at
     return user
@@ -38,6 +40,7 @@ async def db_with_user():
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = fake_user
     mock_db.execute.return_value = mock_result
+    mock_db.scalar = AsyncMock(return_value=fake_user)
     mock_db.commit = AsyncMock()
     mock_db.add = MagicMock()
     mock_db.flush = AsyncMock()
@@ -57,6 +60,7 @@ async def db_empty():
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
+    mock_db.scalar = AsyncMock(return_value=None)
     mock_db.commit = AsyncMock()
 
     async def override_get_db():

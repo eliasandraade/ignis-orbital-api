@@ -51,6 +51,8 @@ def make_fake_gestor() -> MagicMock:
     user.email = "gestor@test.com"
     user.role = "gestor"
     user.is_active = True
+    user.session_version = 0
+    user.must_change_password = False
     user.created_at = datetime.now(UTC)
     user.updated_at = user.created_at
     return user

@@ -261,6 +261,7 @@ async def test_login_is_rate_limited(client):
         result = MagicMock()
         result.scalar_one_or_none.return_value = None
         session.execute.return_value = result
+        session.scalar = AsyncMock(return_value=None)
         yield session
 
     app.dependency_overrides[get_db] = _db
@@ -274,8 +275,7 @@ async def test_login_is_rate_limited(client):
 async def test_public_report_submission_is_rate_limited(client):
     # Invalid payloads still count: the limiter runs before validation-heavy work.
     statuses = [
-        (await client.post("/api/v1/reports", json={"type": "fire"})).status_code
-        for _ in range(11)
+        (await client.post("/api/v1/reports", json={"type": "fire"})).status_code for _ in range(11)
     ]
     assert statuses[-1] == 429
 
@@ -399,8 +399,13 @@ def test_railway_environment_mismatch_refuses_to_boot(railway_env, app_env):
 
 @pytest.mark.parametrize(
     ("railway_env", "app_env"),
-    [("staging", "staging"), ("production", "production"), ("Production", "production"),
-     ("ignis-pr-7", "staging"), ("", "production")],
+    [
+        ("staging", "staging"),
+        ("production", "production"),
+        ("Production", "production"),
+        ("ignis-pr-7", "staging"),
+        ("", "production"),
+    ],
 )
 def test_railway_environment_match_boots(railway_env, app_env):
     settings = Settings(

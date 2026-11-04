@@ -25,6 +25,8 @@ def make_fake_orgao() -> MagicMock:
     user.email = "orgao@test.com"
     user.role = "orgao"
     user.is_active = True
+    user.session_version = 0
+    user.must_change_password = False
     user.created_at = datetime.datetime.now(datetime.UTC)
     user.updated_at = user.created_at
     return user

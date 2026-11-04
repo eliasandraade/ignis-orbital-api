@@ -4,7 +4,7 @@ from app.core.rate_limit import rate_limit
 from app.integrations.open_meteo.schemas import WeatherRiskResponse
 from app.integrations.open_meteo.service import get_weather_risk
 
-router = APIRouter(prefix="/api/v1/environment", tags=["environment"])
+router = APIRouter(prefix="/api/v1/environment", tags=["meteorologia"])
 
 
 @router.get(

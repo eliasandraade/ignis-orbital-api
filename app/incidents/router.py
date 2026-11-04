@@ -19,7 +19,7 @@ from app.incidents.schemas import (
     WarRoomSummary,
 )
 
-router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
+router = APIRouter(prefix="/api/v1/incidents", tags=["incidentes"])
 
 
 @router.get("", response_model=Page[IncidentRead])
@@ -58,7 +58,9 @@ async def list_active_critical(
     current_user=Depends(require_role(UserRole.GESTOR)),
 ) -> Page[IncidentRead]:
     return await incident_service.list_incidents(
-        db, page, size,
+        db,
+        page,
+        size,
         status=IncidentStatus.ACTIVE,
         severity=IncidentSeverity.CRITICAL,
     )

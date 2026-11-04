@@ -6,7 +6,7 @@ from app.core.enums import UserRole
 from app.core.rate_limit import rate_limit
 from app.dependencies import require_role
 
-router = APIRouter(prefix="/api/v1/aurora", tags=["aurora"])
+router = APIRouter(prefix="/api/v1/aurora", tags=["assistente (experimental)"])
 
 
 @router.post("/analyze")

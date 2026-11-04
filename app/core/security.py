@@ -22,11 +22,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str | Any, role: str) -> str:
+def create_access_token(subject: str | Any, role: str, session_version: int = 0) -> str:
     expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     payload = {
         "sub": str(subject),
         "role": role,
+        # Must equal users.session_version: bumping it revokes this token.
+        "sv": session_version,
         "exp": expire,
         "iat": datetime.now(UTC),
     }

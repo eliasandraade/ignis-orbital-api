@@ -4,22 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.database import get_db
 
-router = APIRouter(tags=["health"])
+router = APIRouter(tags=["saúde do serviço"])
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 @router.get("/health")
 async def health() -> dict:
-    return {
-        "status": "ok",
-        "service": "ignis-orbital-api",
-        "version": settings.app_version,
-        "environment": settings.app_env,
-    }
+    """Liveness. Public, so it reveals nothing about the deployment: version and
+    environment are in the admin cockpit (/api/v1/admin/settings)."""
+    return {"status": "ok", "service": "ignis-orbital-api"}
 
 
 @router.get("/ready")

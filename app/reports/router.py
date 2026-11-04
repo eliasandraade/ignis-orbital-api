@@ -12,7 +12,7 @@ from app.dependencies import require_role
 from app.reports import service as report_service
 from app.reports.schemas import ReportCreate, ReportRead, ReportStatusPublic, ReportStatusUpdate
 
-router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+router = APIRouter(prefix="/api/v1/reports", tags=["denúncias"])
 
 
 @router.post(

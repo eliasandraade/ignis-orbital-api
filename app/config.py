@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_expire_minutes: int = Field(default=480, ge=5, le=1440)
 
+    # Public /docs, /redoc and /openapi.json. Unset ("auto"): public only outside
+    # staging/production. Operational environments cannot turn them on: there
+    # the spec is served to administrators at /api/v1/admin/openapi.json.
+    api_docs_public: bool | None = None
+
     # A source whose last successful ingestion is older than this is "stale".
     # Three cron intervals (15 min) plus margin for the providers' own latency.
     orbital_stale_after_minutes: int = Field(default=60, ge=5, le=10080)
@@ -189,6 +194,12 @@ class Settings(BaseSettings):
     @property
     def is_operational(self) -> bool:
         return self.app_env in OPERATIONAL_ENVS
+
+    @property
+    def docs_public(self) -> bool:
+        if self.api_docs_public is None:
+            return not self.is_operational
+        return self.api_docs_public and not self.is_operational
 
     @property
     def demo_seed_allowed(self) -> bool:
