@@ -78,6 +78,14 @@ class RowError(ValueError):
     """One CSV row violates the documented format (counted as rejected)."""
 
 
+class FileError(Exception):
+    """A whole file could not be used; `code` is stored on the run."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 def _coordinate(row: Mapping[str, str], column: str) -> float:
     try:
         value = float((row.get(column) or "").strip())
@@ -189,35 +197,12 @@ class InpeProvider:
                 for name, current_day in file_names(window):
                     file_info: dict[str, Any] = {"name": name}
                     provenance["files"].append(file_info)
-                    headers = {"If-None-Match": known[name]} if name in known else None
-                    response = await get_with_retries(
-                        client,
-                        f"{self._base_url}/{name}",
-                        headers=headers,
-                        policy=self._policy,
-                        spacer=self._spacer,
-                        sleep=self._sleep,
+                    found, bad = await self._read_file(
+                        client, file_info, known.get(name), current_day, bbox
                     )
-                    file_info["status"] = response.status_code
-                    if response.status_code == 304:
-                        file_info["etag"] = known[name]  # same version as last ok run
-                        continue
-                    if response.status_code == 404 and current_day:
-                        continue  # today's file is created during the day
-                    if response.status_code != 200:
-                        return self._unavailable(f"http_{response.status_code}", provenance)
-                    file_info.update(
-                        etag=response.headers.get("etag"),
-                        last_modified=response.headers.get("last-modified"),
-                        bytes=len(response.content),
-                        sha256=hashlib.sha256(response.content).hexdigest(),
-                    )
-                    parsed = self._parse(response.content, bbox, file_info)
-                    if parsed is None:
-                        return self._unavailable("invalid_csv", provenance)
-                    detections.extend(parsed[0])
-                    rejected += parsed[1]
-        except ProviderHttpError as exc:
+                    detections.extend(found)
+                    rejected += bad
+        except (ProviderHttpError, FileError) as exc:
             return self._unavailable(exc.code, provenance)
         return ProviderResult(
             product=product,
@@ -226,6 +211,42 @@ class InpeProvider:
             rejected=rejected,
             provenance=provenance,
         )
+
+    async def _read_file(
+        self,
+        client: httpx.AsyncClient,
+        file_info: dict[str, Any],
+        etag: str | None,
+        current_day: bool,
+        bbox: BBox,
+    ) -> tuple[list[NormalizedDetection], int]:
+        """Download one daily file (conditionally) and parse it."""
+        response = await get_with_retries(
+            client,
+            f"{self._base_url}/{file_info['name']}",
+            headers={"If-None-Match": etag} if etag else None,
+            policy=self._policy,
+            spacer=self._spacer,
+            sleep=self._sleep,
+        )
+        file_info["status"] = response.status_code
+        if response.status_code == 304:
+            file_info["etag"] = etag  # same version as the last ok run
+            return [], 0
+        if response.status_code == 404 and current_day:
+            return [], 0  # today's file is created during the day
+        if response.status_code != 200:
+            raise FileError(f"http_{response.status_code}")
+        file_info.update(
+            etag=response.headers.get("etag"),
+            last_modified=response.headers.get("last-modified"),
+            bytes=len(response.content),
+            sha256=hashlib.sha256(response.content).hexdigest(),
+        )
+        parsed = self._parse(response.content, bbox, file_info)
+        if parsed is None:
+            raise FileError("invalid_csv")
+        return parsed
 
     @staticmethod
     def _parse(

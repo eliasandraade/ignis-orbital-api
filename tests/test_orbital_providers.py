@@ -306,13 +306,14 @@ async def test_transport_error_code_has_no_url():
     def boom(request):
         raise httpx.ConnectError(f"cannot reach {request.url}")
 
+    url, policy, spacer = f"https://x/{FAKE_KEY}", RetryPolicy(attempts=1), RequestSpacer(0)
     async with httpx.AsyncClient(transport=RecordingTransport(boom)) as client:
         with pytest.raises(ProviderHttpError) as info:
             await get_with_retries(
                 client,
-                f"https://x/{FAKE_KEY}",
-                policy=RetryPolicy(attempts=1),
-                spacer=RequestSpacer(0),
+                url,
+                policy=policy,
+                spacer=spacer,
             )
     assert str(info.value) == "connection_error"
     assert info.value.__cause__ is None

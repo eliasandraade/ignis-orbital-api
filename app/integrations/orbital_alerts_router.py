@@ -143,7 +143,11 @@ async def list_ingestion_runs(
     return [IngestionRunRead.model_validate(r) for r in rows]
 
 
-@router.get("/ingestion-runs/{run_id}", dependencies=[Depends(require_role(UserRole.ADMIN))])
+@router.get(
+    "/ingestion-runs/{run_id}",
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    responses={404: {"description": "Execução não encontrada"}},
+)
 async def get_ingestion_run(
     run_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> IngestionRunRead:

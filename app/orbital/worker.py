@@ -55,38 +55,42 @@ async def run_once(settings, sources: tuple[str, ...], window_hours: int) -> int
         product_timeout=settings.ingest_product_timeout_seconds,
     )
     loop = asyncio.get_running_loop()
-    task = asyncio.current_task()
-    stopped = False
+    stop = asyncio.Event()
 
     def _stop(*_):
-        nonlocal stopped
-        stopped = True
-        loop.call_soon_threadsafe(task.cancel)
+        loop.call_soon_threadsafe(stop.set)
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
             loop.add_signal_handler(sig, _stop)
-        except (NotImplementedError, RuntimeError, ValueError):  # Windows
+        except (RuntimeError, ValueError):  # NotImplementedError on Windows
             signal.signal(sig, _stop)
 
+    # The round runs in its own task; a signal or the deadline cancels that task,
+    # which closes its runs as 'interrupted' before it ends.
+    round_task = asyncio.create_task(ingestion.run())
+    stop_task = asyncio.create_task(stop.wait())
     try:
-        async with asyncio.timeout(settings.ingest_round_timeout_seconds):
-            result = await ingestion.run()
-    except TimeoutError:
-        print(json.dumps({"round": "timeout", "runs": [r.summary() for r in ingestion.runs]}))
-        return 1
-    except asyncio.CancelledError:
-        if not stopped:
-            raise
-        print(json.dumps({"round": "interrupted", "runs": [r.summary() for r in ingestion.runs]}))
-        return EXIT_SIGNAL
+        await asyncio.wait(
+            {round_task, stop_task},
+            timeout=settings.ingest_round_timeout_seconds,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        stop_task.cancel()
+        if round_task.done():
+            result = round_task.result()
+            outcome, code = {"round": "finished", "exit_code": result.exit_code}, result.exit_code
+        else:
+            round_task.cancel()
+            await asyncio.gather(round_task, return_exceptions=True)
+            interrupted = stop.is_set()
+            outcome = {"round": "interrupted" if interrupted else "timeout"}
+            code = EXIT_SIGNAL if interrupted else 1
     finally:
         with contextlib.suppress(Exception):
             await engine.dispose()
-    print(
-        json.dumps({"round": "finished", "exit_code": result.exit_code, "runs": result.summary()})
-    )
-    return result.exit_code
+    print(json.dumps({**outcome, "runs": [r.summary() for r in ingestion.runs]}))
+    return code
 
 
 def main(argv: list[str]) -> int:

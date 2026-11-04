@@ -135,6 +135,29 @@ def _observed_at(row: Mapping[str, str]) -> datetime:
         raise RowError("acq_date/acq_time inválidos") from exc
 
 
+def _sensor_fields(instrument: str, row: Mapping[str, str]) -> dict[str, Any]:
+    """Confidence and brightness exactly as the sensor reports them."""
+    if instrument == "VIIRS":
+        confidence = _VIIRS_CONFIDENCE.get((row.get("confidence") or "").strip().lower())
+        if confidence is None:
+            raise RowError("confidence VIIRS fora de low/nominal/high")
+        brightness = _number(row, "bright_ti4", required=False)
+        return {
+            "confidence": confidence,
+            "brightness_k": brightness,
+            "brightness_channel": "VIIRS_I4" if brightness is not None else None,
+        }
+    pct = _number(row, "confidence")
+    if pct is None or not pct.is_integer() or not 0 <= pct <= 100:
+        raise RowError("confidence MODIS fora de 0..100")
+    brightness = _number(row, "brightness", required=False)
+    return {
+        "confidence_pct": int(pct),
+        "brightness_k": brightness,
+        "brightness_channel": "MODIS_21_22" if brightness is not None else None,
+    }
+
+
 def parse_row(product_id: str, row: Mapping[str, str]) -> NormalizedDetection:
     product = PRODUCTS[product_id]
     code = (row.get("satellite") or "").strip()
@@ -145,21 +168,7 @@ def parse_row(product_id: str, row: Mapping[str, str]) -> NormalizedDetection:
     if instrument != product.instrument:
         raise RowError(f"instrumento {instrument!r} não pertence a {product_id}")
 
-    if product.instrument == "VIIRS":
-        confidence = _VIIRS_CONFIDENCE.get((row.get("confidence") or "").strip().lower())
-        if confidence is None:
-            raise RowError("confidence VIIRS fora de low/nominal/high")
-        confidence_pct = None
-        brightness = _number(row, "bright_ti4", required=False)
-        channel = "VIIRS_I4"
-    else:
-        confidence = None
-        pct = _number(row, "confidence")
-        if pct is None or not pct.is_integer() or not 0 <= pct <= 100:
-            raise RowError("confidence MODIS fora de 0..100")
-        confidence_pct = int(pct)
-        brightness = _number(row, "brightness", required=False)
-        channel = "MODIS_21_22"
+    sensor = _sensor_fields(product.instrument, row)
 
     daynight = (row.get("daynight") or "").strip().upper() or None
     try:
@@ -171,12 +180,9 @@ def parse_row(product_id: str, row: Mapping[str, str]) -> NormalizedDetection:
             observed_at=_observed_at(row),
             latitude=_number(row, "latitude"),
             longitude=_number(row, "longitude"),
-            confidence=confidence,
-            confidence_pct=confidence_pct,
             frp_mw=_number(row, "frp", required=False),
-            brightness_k=brightness,
-            brightness_channel=channel if brightness is not None else None,
             daynight=daynight,
+            **sensor,
             raw=dict(row),
         )
     except InvalidDetectionError as exc:
@@ -232,6 +238,7 @@ class FirmsProvider:
         *,
         previous: Mapping[str, Any] | None = None,
     ) -> ProviderResult:
+        del previous  # the area API has no conditional requests (no ETag)
         if not self._key:
             return ProviderResult(
                 product=product,

@@ -519,7 +519,8 @@ async def test_worker_with_unreachable_provider_exits_2_and_hides_the_key(
         params = (
             (await conn.execute(text("SELECT params::text FROM ingestion_runs"))).scalars().all()
         )
-    assert params and all(FAKE_KEY not in p for p in params)
+    assert params
+    assert all(FAKE_KEY not in p for p in params)
 
 
 async def test_worker_invalid_configuration_exits_3(geo_database):
@@ -696,3 +697,42 @@ def test_worker_rejects_invalid_configuration(monkeypatch, capsys):
     monkeypatch.setattr("app.config.get_settings", broken)
     assert worker.main([]) == 3
     assert "Configuração inválida" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is TerminateProcess on Windows")
+async def test_sigterm_closes_the_runs_as_interrupted(clean_orbital, geo_database, silent_server):
+    import signal
+    import time
+
+    child = subprocess.Popen(
+        [sys.executable, "-m", "app.orbital.worker", "--source", "firms"],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "APP_ENV": "test",
+            "DATABASE_URL": postgis.asyncpg_url(geo_database),
+            "NASA_FIRMS_MAP_KEY": FAKE_KEY,
+            "NASA_FIRMS_BASE_URL": silent_server,
+            "INGEST_HTTP_ATTEMPTS": "1",
+            "INGEST_MIN_REQUEST_INTERVAL_SECONDS": "0",
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:  # wait until the worker owns its runs
+            if await scalar(clean_orbital, "SELECT count(*) FROM ingestion_runs") == 4:
+                break
+            await asyncio.sleep(0.2)
+        child.send_signal(signal.SIGTERM)
+        out, _ = child.communicate(timeout=60)
+    finally:
+        if child.poll() is None:
+            child.kill()
+    assert child.returncode == 143
+    assert json.loads(out.strip().splitlines()[-1])["round"] == "interrupted"
+    runs = await runs_by_product(clean_orbital)
+    assert {(r.status, r.error_code) for r in runs.values()} == {("error", "interrupted")}
+    assert FAKE_KEY not in out
