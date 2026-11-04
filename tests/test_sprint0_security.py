@@ -69,7 +69,8 @@ def test_cors_origins_accepts_documented_env_formats(monkeypatch, raw):
 
 def test_demo_modes_are_off_by_default():
     settings = Settings(_env_file=None)
-    assert settings.orbital_alerts_demo_mode is False
+    # Sprint 1.3: the orbital demo mode no longer exists (alerts come from PostGIS).
+    assert not hasattr(settings, "orbital_alerts_demo_mode")
     assert settings.trust_proxy_headers is False
 
 

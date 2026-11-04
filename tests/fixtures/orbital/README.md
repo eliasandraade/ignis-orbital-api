@@ -10,7 +10,7 @@ Cada recorte mantém o cabeçalho original e só as linhas dentro do envelope do
 | `firms_VIIRS_NOAA20_NRT.csv` | `…/noaa-20-viirs-c2/csv/J1_VIIRS_C2_South_America_24h.csv` | 15.210 | 227 | `bc1a2a70bb853364b3313d00cd6d1908038d325e50c6b8e9d7f8631c2c331bb7` |
 | `firms_VIIRS_NOAA21_NRT.csv` | `…/noaa-21-viirs-c2/csv/J2_VIIRS_C2_South_America_24h.csv` | 14.976 | 210 | `b58d1d7b9b8ff03394ab1e5fc319c24ed75f67424694d9eeba601da7dfc3afd0` |
 | `firms_MODIS_NRT.csv` | `…/modis-c6.1/csv/MODIS_C6_1_South_America_24h.csv` | 5.106 | 133 | `67449c3f6a3edba43b815458ead5169dd3d1028cd2a1896c8da0622b9d1413e9` |
-| `inpe_focos_diario_br_20261103.csv` | `https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/focos_diario_br_20261103.csv` (versão com `Last-Modified: Wed, 04 Nov 2026 03:05:02 GMT`) | 14.516 | 511 | `6b3fbe4112248e23051258d1dd606ea9728e1a95925af239daa83881724d37a0` |
+| `data/samples/inpe/focos_diario_br_20261103.csv` (fora desta pasta: vai na imagem, para validação local sem rede) | `https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/focos_diario_br_20261103.csv` (versão com `Last-Modified: Wed, 04 Nov 2026 03:05:02 GMT`) | 14.516 | 511 | `6b3fbe4112248e23051258d1dd606ea9728e1a95925af239daa83881724d37a0` |
 
 ## Seleção
 

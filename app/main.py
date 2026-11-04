@@ -10,6 +10,7 @@ from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.esg.router import router as esg_router
 from app.evidence.router import router as evidence_router
+from app.geo.router import router as jurisdictions_router
 from app.health.router import router as health_router
 from app.incidents.router import router as incidents_router
 from app.integrations.environment_router import router as environment_router
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     # External integrations — Fase 1: Open-Meteo, NASA FIRMS, OSM/Nominatim
     app.include_router(environment_router)
     app.include_router(orbital_alerts_router)
+    app.include_router(jurisdictions_router)
     app.include_router(geocoding_router)
 
     return app

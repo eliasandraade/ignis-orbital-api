@@ -1,14 +1,11 @@
-"""Honest-state contract for GET /api/v1/orbital-alerts and POST /ingest.
+"""Contract of /api/v1/orbital-alerts that needs no database.
 
-Regression tests for the Sprint 0 findings:
-- demo alerts were reported as source_status="live" when a key was present;
-- records_inserted reported rows that were never written to the database;
-- ingest was callable without authentication;
-- upstream error messages could embed the NASA MAP_KEY (it is part of the URL).
+Sprint 0 tested the live NASA read path here; since Sprint 1.3 the public
+read comes only from PostGIS (tests/test_postgis_read_api.py). What stays
+here: authorization of the administrative routes, filter validation and the
+guarantee that a public read never reaches NASA or INPE.
 """
 
-import csv
-import io
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,71 +14,18 @@ import pytest
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.integrations.nasa_firms import service as firms_service
-from app.integrations.nasa_firms.client import InvalidFirmsResponseError, MissingApiKeyError
-from app.integrations.nasa_firms.service import _csv_row_to_alert
 from app.main import app
-
-FAKE_KEY = "FAKEMAPKEY0123456789"
-
-CSV_OK = (
-    "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,"
-    "instrument,confidence,version,bright_ti5,frp,daynight\n"
-    "-4.20000,-38.50000,330.1,0.4,0.4,2026-11-02,1530,N,VIIRS,n,2.0NRT,295.0,5.1,D\n"
-    "-5.10000,-39.20000,340.5,0.4,0.4,2026-11-02,1530,N,VIIRS,h,2.0NRT,296.0,9.8,D\n"
-    # duplicated row — must be deduplicated
-    "-5.10000,-39.20000,340.5,0.4,0.4,2026-11-02,1530,N,VIIRS,h,2.0NRT,296.0,9.8,D\n"
-    # low confidence — skipped
-    "-6.00000,-40.00000,300.0,0.4,0.4,2026-11-02,1530,N,VIIRS,10,2.0NRT,290.0,1.0,D\n"
-)
-
-
-def _rows(csv_text: str) -> list[dict]:
-    return list(csv.DictReader(io.StringIO(csv_text)))
+from app.orbital import queries
+from app.orbital.read_schemas import DetectionPage
 
 
 def _user(role: str) -> MagicMock:
     user = MagicMock()
     user.id = uuid.uuid4()
-    user.name = f"Test {role}"
     user.role = role
+    user.name = f"Usuário {role}"
     user.is_active = True
     return user
-
-
-def _http_error(status: int) -> httpx.HTTPStatusError:
-    request = httpx.Request("GET", f"https://firms.example/api/area/csv/{FAKE_KEY}/VIIRS")
-    return httpx.HTTPStatusError(
-        f"Error for url {request.url}",
-        request=request,
-        response=httpx.Response(status, request=request),
-    )
-
-
-@pytest.fixture
-def firms_key(monkeypatch):
-    monkeypatch.setattr(firms_service.settings, "nasa_firms_map_key", FAKE_KEY)
-    return FAKE_KEY
-
-
-@pytest.fixture
-def demo_mode(monkeypatch):
-    monkeypatch.setattr(firms_service.settings, "orbital_alerts_demo_mode", True)
-
-
-@pytest.fixture
-def fake_firms(monkeypatch):
-    """Replace the network call; records how many times NASA was called."""
-    state = {"calls": 0, "rows": None, "exc": None}
-
-    async def _fetch(bbox, date=None):
-        state["calls"] += 1
-        if state["exc"] is not None:
-            raise state["exc"]
-        return state["rows"] if state["rows"] is not None else _rows(CSV_OK)
-
-    monkeypatch.setattr(firms_service.firms_client, "fetch_viirs_csv", _fetch)
-    return state
 
 
 @pytest.fixture
@@ -101,129 +45,7 @@ def as_role():
     return _set
 
 
-@pytest.fixture
-def mock_transport(monkeypatch):
-    """Route the FIRMS client's httpx calls to a canned response."""
-    real_client = httpx.AsyncClient
-
-    def _install(response: httpx.Response):
-        def _factory(**kwargs):
-            return real_client(transport=httpx.MockTransport(lambda req: response), **kwargs)
-
-        monkeypatch.setattr(firms_service.firms_client.httpx, "AsyncClient", _factory)
-
-    return _install
-
-
-# --- GET without key ------------------------------------------------------------
-
-
-async def test_list_without_key_returns_no_data_and_never_live(client):
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "disabled_missing_api_key"
-    assert data["items"] == []
-    assert data["total"] == 0
-    assert data["data_origin"] == "none"
-    assert data["persisted"] is False
-    assert "NASA_FIRMS_MAP_KEY" in data["message"]
-
-
-async def test_list_demo_mode_is_explicitly_flagged(client, demo_mode):
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "demo"
-    assert data["data_origin"] == "demo"
-    assert data["total"] == len(data["items"]) > 0
-    assert all(item["is_demo"] for item in data["items"])
-    assert all(not item["source"].startswith("NASA") for item in data["items"])
-
-
-async def test_list_with_key_never_returns_demo_items(client, firms_key, demo_mode, fake_firms):
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "live"
-    assert not any(item["is_demo"] for item in data["items"])
-    assert not any(item["id"].startswith("demo-") for item in data["items"])
-
-
-# --- GET with key -----------------------------------------------------------------
-
-
-async def test_list_with_key_live_then_cached(client, firms_key, fake_firms):
-    first = (await client.get("/api/v1/orbital-alerts")).json()
-    assert first["source_status"] == "live"
-    assert first["data_origin"] == "nasa_firms"
-    assert first["persisted"] is False
-    assert first["total"] == 2  # 4 rows: 1 duplicate + 1 low confidence removed
-    assert first["fetched_at"] is not None
-    assert "não confirmam incêndio" in first["disclaimer"].lower()
-
-    second = (await client.get("/api/v1/orbital-alerts")).json()
-    assert second["source_status"] == "cached"
-    assert second["cached_at"] == first["fetched_at"]
-    assert [i["id"] for i in second["items"]] == [i["id"] for i in first["items"]]
-    assert fake_firms["calls"] == 1
-
-
-async def test_list_with_key_and_zero_detections_is_live_and_empty(client, firms_key, fake_firms):
-    fake_firms["rows"] = []
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "live"
-    assert data["total"] == 0
-
-
-async def test_list_upstream_failure_is_unavailable_without_leaking_key(
-    client, firms_key, fake_firms
-):
-    fake_firms["exc"] = _http_error(500)
-
-    resp = await client.get("/api/v1/orbital-alerts")
-    data = resp.json()
-    assert data["source_status"] == "unavailable"
-    assert data["items"] == []
-    assert data["data_origin"] == "none"
-    assert FAKE_KEY not in resp.text
-    assert "HTTPStatusError" in data["message"]
-
-    # Within the backoff window NASA is not called again.
-    again = (await client.get("/api/v1/orbital-alerts")).json()
-    assert again["source_status"] == "unavailable"
-    assert fake_firms["calls"] == 1
-
-
-async def test_list_timeout_is_unavailable(client, firms_key, fake_firms):
-    fake_firms["exc"] = httpx.ConnectTimeout("timed out")
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "unavailable"
-    assert "ConnectTimeout" in data["message"]
-
-
-async def test_list_invalid_firms_body_is_unavailable(client, firms_key, mock_transport):
-    mock_transport(httpx.Response(200, text="Invalid MAP_KEY."))
-    data = (await client.get("/api/v1/orbital-alerts")).json()
-    assert data["source_status"] == "unavailable"
-    assert data["total"] == 0
-
-
-# --- client ---------------------------------------------------------------------
-
-
-async def test_client_rejects_non_csv_body(firms_key, mock_transport):
-    mock_transport(httpx.Response(200, text="Invalid MAP_KEY."))
-    with pytest.raises(InvalidFirmsResponseError):
-        await firms_service.firms_client.fetch_viirs_csv("-45,-12,-34.5,2.5")
-
-
-async def test_client_parses_valid_csv(firms_key, mock_transport):
-    mock_transport(httpx.Response(200, text=CSV_OK))
-    rows = await firms_service.firms_client.fetch_viirs_csv("-45,-12,-34.5,2.5")
-    assert len(rows) == 4
-
-
-async def test_client_without_key_makes_no_network_call():
-    with pytest.raises(MissingApiKeyError):
-        await firms_service.firms_client.fetch_viirs_csv("-45,-12,-34.5,2.5")
-
-
-# --- POST /ingest authorization ----------------------------------------------------
+# --- administrative routes -----------------------------------------------------------
 
 
 async def test_ingest_requires_authentication(client):
@@ -245,25 +67,123 @@ async def test_ingestion_runs_are_admin_only(client, as_role, path):
     assert (await client.get(f"/api/v1/orbital-alerts{path}")).status_code == 403
 
 
-async def test_public_read_never_starts_an_ingestion_run(client, monkeypatch):
+# --- public read: database only ------------------------------------------------------
+
+
+async def test_public_read_never_calls_providers_nor_starts_ingestion(client, monkeypatch):
     from app.integrations import orbital_alerts_router as router
 
     def _forbidden(*args, **kwargs):
-        raise AssertionError("GET /orbital-alerts não pode iniciar ingestão")
+        raise AssertionError("leitura pública não pode iniciar ingestão nem chamar provedor")
+
+    async def _no_network(self, request):
+        raise AssertionError(f"leitura pública tentou acessar a rede: {request.url.host}")
+
+    async def _page(session, f, *, page, size, stale_after):
+        return DetectionPage(
+            items=[],
+            total=0,
+            page=page,
+            size=size,
+            pages=1,
+            truncated=False,
+            filters=f.applied(),
+            sources=[],
+        )
 
     monkeypatch.setattr(router, "IngestionRound", _forbidden)
-    assert (await client.get("/api/v1/orbital-alerts")).status_code == 200
+    monkeypatch.setattr(router, "providers_from_settings", _forbidden)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", _no_network)
+    monkeypatch.setattr(queries, "list_detections", AsyncMock(side_effect=_page))
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    response = await client.get("/api/v1/orbital-alerts")
+    assert response.status_code == 200
+    assert response.json()["data_origin"] == "postgis"
+    assert queries.list_detections.await_count == 1
 
 
-# --- parsing ---------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "query",
+    [
+        "from=2026-11-04T00:00:00Z&to=2026-11-01T00:00:00Z",  # inverted
+        "from=2026-01-01T00:00:00Z&to=2026-11-01T00:00:00Z",  # > 92 days
+        "source=DEMO",
+        "jurisdiction=2304",  # not a 7-digit IBGE code
+        "satellite=N20;DROP",
+        "bbox=-41,-8,-37",  # 3 numbers
+        "bbox=-80,-40,-30,10",  # wider than 20 degrees
+        "bbox=-37,-8,-41,-3",  # west > east
+        "bbox=-41,-8,nan,-3",
+        "size=5001",
+        "page=0",
+    ],
+)
+async def test_invalid_filters_are_rejected_before_any_query(client, query, monkeypatch):
+    called = AsyncMock()
+    monkeypatch.setattr(queries, "list_detections", called)
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    response = await client.get(f"/api/v1/orbital-alerts?{query}")
+    assert response.status_code == 422
+    called.assert_not_awaited()
 
 
-def test_alert_ids_are_stable_across_fetches():
-    row = _rows(CSV_OK)[0]
-    assert _csv_row_to_alert(row).id == _csv_row_to_alert(dict(row)).id
+def test_default_window_is_the_last_seven_days():
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 11, 4, 12, tzinfo=UTC)
+    f = queries.build_filters(
+        observed_from=None,
+        observed_to=None,
+        source=None,
+        satellite=None,
+        jurisdiction=None,
+        bbox=None,
+        now=now,
+    )
+    assert (f.observed_from, f.observed_to) == (now - timedelta(days=7), now)
 
 
-def test_out_of_range_coordinates_are_rejected():
-    row = _rows(CSV_OK)[0]
-    row["latitude"] = "123.0"
-    assert _csv_row_to_alert(row) is None
+def test_naive_datetimes_are_read_as_utc():
+    from datetime import UTC, datetime
+
+    f = queries.build_filters(
+        observed_from=datetime(2026, 11, 1),
+        observed_to=datetime(2026, 11, 2),
+        source="INPE_QUEIMADAS",
+        satellite="NOAA-20",
+        jurisdiction="2304400",
+        bbox="-41.5,-7.9,-37.2,-2.7",
+    )
+    assert f.observed_from.tzinfo is UTC
+    assert f.bbox == (-41.5, -7.9, -37.2, -2.7)
+
+
+@pytest.mark.parametrize(
+    ("states", "expected"),
+    [
+        (["disabled", "disabled"], "disabled"),
+        (["never_ingested"], "never_ingested"),
+        (["disabled", "never_ingested"], "never_ingested"),
+        (["live", "live"], "live"),
+        (["live", "unavailable"], "degraded"),
+        (["live", "disabled"], "live"),
+        (["stale", "stale"], "stale"),
+        (["stale", "unavailable"], "unavailable"),
+        (["unavailable"], "unavailable"),
+    ],
+)
+def test_source_state_aggregation(states, expected):
+    assert queries._source_state(states) == expected
+
+
+def test_product_state_separates_failure_age_and_configuration():
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 11, 4, 12, tzinfo=UTC)
+    hour = timedelta(hours=1)
+    assert queries._product_state(None, None, now, hour) == "never_ingested"
+    assert queries._product_state("disabled", None, now, hour) == "disabled"
+    assert queries._product_state("unavailable", now, now, hour) == "unavailable"
+    assert queries._product_state("partial", now, now, hour) == "unavailable"
+    assert queries._product_state("ok", now - timedelta(minutes=5), now, hour) == "live"
+    assert queries._product_state("ok", now - 2 * hour, now, hour) == "stale"
