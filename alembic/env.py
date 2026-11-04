@@ -9,8 +9,10 @@ from app.config import get_settings
 from app.database import Base
 from app.esg.model import ESGReport  # noqa: F401
 from app.evidence.model import Evidence  # noqa: F401
+from app.geo.model import Jurisdiction, ReferenceDataset  # noqa: F401
 from app.incidents.model import Incident, IncidentEvent  # noqa: F401
 from app.missions.model import Mission  # noqa: F401
+from app.orbital.model import IngestionRun, OrbitalDetection  # noqa: F401
 from app.protected_areas.model import ProtectedArea  # noqa: F401
 from app.reports.model import PublicReport  # noqa: F401
 from app.resources.model import Resource  # noqa: F401
