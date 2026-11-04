@@ -25,7 +25,6 @@ from app.integrations._cache import cache_get, cache_set
 from app.integrations.nasa_firms import client as firms_client
 from app.integrations.nasa_firms.client import MissingApiKeyError
 from app.integrations.nasa_firms.schemas import (
-    IngestResponse,
     OrbitalAlert,
     OrbitalAlertListResponse,
 )
@@ -240,44 +239,4 @@ async def list_alerts(bbox: str | None = None) -> OrbitalAlertListResponse:
         cached_at=fetched_at.isoformat() if status == "cached" else None,
         fetched_at=fetched_at.isoformat(),
         message="Dados NASA FIRMS mantidos apenas em cache de memória; não persistidos em banco.",
-    )
-
-
-async def ingest_viirs(bbox: str | None = None) -> IngestResponse:
-    """Fetch NASA FIRMS VIIRS data and refresh the in-memory cache.
-
-    Never reports database persistence: records_inserted stays 0 and the
-    status is "processed_not_persisted" until the orbital_alerts table exists.
-    """
-    if not settings.nasa_firms_map_key:
-        return IngestResponse(
-            status="disabled_missing_api_key",
-            message=(
-                "Ingestão NASA FIRMS desabilitada: NASA_FIRMS_MAP_KEY não configurada. "
-                "Nenhum dado foi buscado ou gravado."
-            ),
-        )
-
-    try:
-        alerts, rows, _fetched_at = await _fetch_and_cache(bbox or _DEFAULT_BBOX)
-    except MissingApiKeyError as exc:
-        return IngestResponse(status="disabled_missing_api_key", message=str(exc))
-    except FirmsUnavailableError as exc:
-        return IngestResponse(
-            status="unavailable",
-            message=f"{exc}. Nenhum dado foi gravado.",
-        )
-
-    return IngestResponse(
-        status="processed_not_persisted",
-        message=(
-            f"{len(alerts)} focos válidos de {rows} linhas recebidas da NASA FIRMS, "
-            "mantidos apenas em cache de memória. Nenhum registro foi gravado em banco "
-            "(persistência planejada para a Fase 1)."
-        ),
-        records_fetched=rows,
-        records_valid=len(alerts),
-        records_inserted=0,
-        records_skipped=rows - len(alerts),
-        persisted=False,
     )
