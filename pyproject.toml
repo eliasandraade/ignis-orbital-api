@@ -61,3 +61,6 @@ addopts = "--cov=app --cov-report=term-missing"
 
 [tool.coverage.run]
 omit = ["tests/*", "seed/*", "alembic/*"]
+# SQLAlchemy's asyncio layer runs queries in greenlets; without this,
+# coverage loses the frames that resume after a database call.
+concurrency = ["thread", "greenlet"]

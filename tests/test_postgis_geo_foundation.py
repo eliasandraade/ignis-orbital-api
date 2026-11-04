@@ -2,6 +2,7 @@
 
 import asyncio
 import random
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -34,6 +35,7 @@ def detection(lat_lon, minute=0, satellite="N20", **overrides) -> NormalizedDete
         "confidence": "nominal",
         "frp_mw": 3.5,
         "brightness_k": 331.2,
+        "brightness_channel": "VIIRS_I4",
         "daynight": "D",
         "raw": {"acq_time": "1542"},
     }
@@ -59,14 +61,14 @@ def fresh_database():
 def test_migration_upgrade_downgrade_upgrade(fresh_database):
     postgis.alembic("upgrade", postgis.BASELINE_REVISION, database=fresh_database)
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a013 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
     postgis.alembic("downgrade", postgis.BASELINE_REVISION, database=fresh_database)
     out = postgis.run_module(
         "seed.jurisdictions", database=fresh_database
     )  # tables are gone: the importer must fail, not create them
     assert out.returncode != 0
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a013 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
 
 
 async def test_schema_matches_the_models(geo_engine):
@@ -455,27 +457,39 @@ async def test_batch_must_match_the_run_source(clean_orbital):
             await repository.persist_batch(session, run.id, [], rejected=-1)
 
 
-async def test_abandoned_runs_can_be_closed(clean_orbital):
+async def test_only_runs_whose_owner_is_gone_are_recovered(clean_orbital):
+    """Liveness is the lease, not the clock: an old run whose owner still holds
+    its connection is untouched; once that connection ends it is recovered."""
     engine = clean_orbital
+    owner_engine = create_async_engine(engine.url, poolclass=NullPool)
+    owner_conn = await owner_engine.connect()
+    owner = AsyncSession(bind=owner_conn, expire_on_commit=False)
+    run_id = uuid.uuid4()
+    await repository.acquire_lease(owner, run_id)
+    await repository.start_run(
+        owner, DetectionSource.NASA_FIRMS, "VIIRS_NOAA20_NRT", trigger="schedule", run_id=run_id
+    )
+    await repository.persist_batch(owner, run_id, [detection(FORTALEZA)])
+    await owner.commit()
+    async with engine.begin() as conn:  # make it look ancient: irrelevant for liveness
+        await conn.execute(text("UPDATE ingestion_runs SET started_at = now() - interval '2 days'"))
+
     async with AsyncSession(engine) as session:
-        run = await start(session)
-        await repository.persist_batch(session, run.id, [detection(FORTALEZA)])
+        alive = await repository.recover_abandoned_runs(
+            session, DetectionSource.NASA_FIRMS, "VIIRS_NOAA20_NRT"
+        )
         await session.commit()
+    assert alive == []
+
+    await owner.close()
+    await owner_conn.close()  # the owner "dies": PostgreSQL drops its lease
+    await owner_engine.dispose()
     async with AsyncSession(engine) as session:
-        assert (
-            await repository.abandon_stale_runs(
-                session, DetectionSource.NASA_FIRMS, "VIIRS_NOAA20_NRT", timedelta(hours=1)
-            )
-            == 0
-        )
-        await session.execute(
-            text("UPDATE ingestion_runs SET started_at = now() - interval '3 hours'")
-        )
-        closed = await repository.abandon_stale_runs(
-            session, DetectionSource.NASA_FIRMS, "VIIRS_NOAA20_NRT", timedelta(hours=1)
+        recovered = await repository.recover_abandoned_runs(
+            session, DetectionSource.NASA_FIRMS, "VIIRS_NOAA20_NRT"
         )
         await session.commit()
-    assert closed == 1
+    assert recovered == [run_id]
     async with engine.connect() as conn:
         row = (
             await conn.execute(

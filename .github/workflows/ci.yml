@@ -184,6 +184,13 @@ jobs:
               await conn.close()
           asyncio.run(main())
           PY
+      - name: Papel ingest do container (sem chave e sem INPE → runs disabled, exit 0)
+        env:
+          NASA_FIRMS_MAP_KEY: ""
+          INPE_QUEIMADAS_ENABLED: "false"
+        run: |
+          bash scripts/entrypoint.sh ingest | tee /tmp/ingest.json
+          tail -1 /tmp/ingest.json | python -c "import json,sys; d=json.load(sys.stdin);             assert d['round'] == 'finished' and {r['status'] for r in d['runs']} == {'disabled'}, d"
       - name: Healthcheck da API contra o banco migrado
         run: |
           python -m uvicorn app.main:app --port 8000 &
@@ -245,6 +252,8 @@ jobs:
           fi
       - name: Malha oficial do IBGE embarcada na imagem e íntegra (SHA-256)
         run: docker run --rm --entrypoint python ignis-orbital-api:ci -m seed.jurisdictions --verify-files
+      - name: Worker de ingestão presente na imagem
+        run: docker run --rm --entrypoint python ignis-orbital-api:ci -m app.orbital.worker --help
       - name: Container recusa iniciar sem APP_ENV
         run: |
           if docker run --rm --entrypoint /app/scripts/entrypoint.sh ignis-orbital-api:ci; then

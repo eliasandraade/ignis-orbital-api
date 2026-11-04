@@ -43,6 +43,7 @@ def detection(**overrides) -> NormalizedDetection:
         "confidence": "nominal",
         "frp_mw": 4.2,
         "brightness_k": 330.1,
+        "brightness_channel": "VIIRS_I4",
         "daynight": "D",
         "raw": {"scan": "0.39"},
     }
@@ -112,7 +113,14 @@ def test_detection_contract_rejects_invalid_records(overrides):
 
 
 def test_detection_contract_accepts_minimal_record():
-    minimal = detection(confidence=None, frp_mw=None, brightness_k=None, daynight=None, raw={})
+    minimal = detection(
+        confidence=None,
+        frp_mw=None,
+        brightness_k=None,
+        brightness_channel=None,
+        daynight=None,
+        raw={},
+    )
     assert minimal.raw == {}
 
 
