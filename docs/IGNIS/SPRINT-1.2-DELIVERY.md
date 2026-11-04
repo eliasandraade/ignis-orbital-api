@@ -187,13 +187,15 @@ Observação: a página da FIRMS diz que o Suomi NPP "não entrega mais dados no
 
 | Verificação | Resultado |
 |---|---|
-| Suíte completa | **381 testes passando**, cobertura **84,05%**. Módulos novos entre 88% e 96% |
-| Testes da sprint | 47 de provedores e contrato (sem banco); 27 de integração PostGIS (rodadas, recuperação, concorrência, endpoint, worker); 2 de contrato da API |
+| Suíte completa (local, Windows) | **381 testes passando** (o de SIGTERM é pulado no Windows), cobertura **84,23%**. Módulos novos entre 89% e 97% |
+| Testes da sprint | 47 de provedores e contrato (sem banco); 28 de integração PostGIS (rodadas, recuperação, concorrência, endpoint, worker, SIGTERM); 2 de contrato da API |
 | Migrations | `upgrade head` termina em `a014`. `downgrade` e `upgrade` foram cobertos pelo teste de migration da Sprint 1.1 (agora até `a014`). Esquema igual aos modelos nas tabelas da Fase 1 |
 | Ruff | sem apontamentos |
 | actionlint 1.7.7 (`ci.yml`, `promote.yml`, com shellcheck) | sem apontamentos |
 | IaC (`tsc` + contrato) | 22 checagens |
 | Docker | imagem construída; papéis `migrate` e `ingest` executados contra o banco isolado (6.1) |
+| CI do PR #7, run `41772083529` (commit `6933fdb`) | **todos os checks verdes**: Ruff, Pytest (**382 passando**, 0 *skip*, cobertura **84,18%**; o 382º é o teste de SIGTERM, que só roda no Linux), Migrations (inclui o papel `ingest` do container: exit 0, 5 execuções `disabled`), Docker (worker presente na imagem), IaC (22), pip-audit, lockfile, GitGuardian e SonarCloud (Quality Gate OK, 0 issues) |
+| 1ª execução do Sonar no PR | Quality Gate **falhou**: confiabilidade C por um `CancelledError` capturado sem relançar no worker, mais 7 *code smells*. O worker foi reestruturado (a rodada em tarefa própria, cancelada por sinal ou prazo) e o restante corrigido em `6933fdb`, sem mudar o comportamento |
 | Medição de cobertura | corrigida: `concurrency = ["thread", "greenlet"]`. Sem isso, o coverage perdia as linhas executadas depois de cada chamada ao banco (o roteador aparecia com 70% mesmo com os testes passando) |
 
 ## 7. Correção documental: Nota Metodológica do IBGE
