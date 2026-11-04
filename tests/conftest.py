@@ -45,3 +45,44 @@ async def client_no_db(client):
     app.dependency_overrides[get_db] = _failing_db
     yield client
     app.dependency_overrides.clear()
+
+
+# --- PostGIS integration (tests/postgis.py) ---------------------------------
+
+
+@pytest.fixture(scope="session")
+def geo_database():
+    """A migrated database with the official IBGE boundaries imported once."""
+    from tests import postgis
+
+    postgis.require_postgis()
+    name = postgis.create_database()
+    try:
+        postgis.alembic("upgrade", "head", database=name)
+        result = postgis.run_module("seed.jurisdictions", database=name)
+        assert result.returncode == 0, result.stderr
+        yield name
+    finally:
+        postgis.drop_database(name)
+
+
+@pytest.fixture
+async def geo_engine(geo_database):
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from tests import postgis
+
+    engine = create_async_engine(postgis.asyncpg_url(geo_database), poolclass=NullPool)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture
+async def clean_orbital(geo_engine):
+    """Detections and runs start empty; the boundaries stay."""
+    from sqlalchemy import text
+
+    async with geo_engine.begin() as conn:
+        await conn.execute(text("TRUNCATE orbital_detections, ingestion_runs"))
+    return geo_engine
