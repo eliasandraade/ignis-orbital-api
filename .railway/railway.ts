@@ -164,6 +164,9 @@ export default defineRailway((ctx, project) => {
       INPE_QUEIMADAS_ENABLED: "true",
       MIGRATE_ON_START: "false",
       SKIP_DEMO_SEED: "true",
+      // Citizens' reports carry personal data: closed until the owner records
+      // the LGPD analysis (D-1). Opening it is a reviewed change to this file.
+      PUBLIC_REPORTS_ENABLED: "false",
       WEB_CONCURRENCY: "1",
       // Only ignis-web reaches the API (private network); it forwards the
       // X-Real-IP that Railway's edge wrote for the client.

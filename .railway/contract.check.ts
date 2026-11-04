@@ -126,6 +126,10 @@ for (const env of ["staging", "production"] as const) {
     assert.equal(literal(api, "SKIP_DEMO_SEED"), "true");
   });
 
+  check(`${env}: citizens' reports (personal data) stay closed`, () => {
+    assert.equal(literal(api, "PUBLIC_REPORTS_ENABLED"), "false");
+  });
+
   check(`${env}: secrets are never literals in the repository`, () => {
     preserved(api, "JWT_SECRET_KEY");
     preserved(postgis, "POSTGRES_PASSWORD");

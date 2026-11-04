@@ -130,6 +130,12 @@ class Settings(BaseSettings):
     # staging/production, and operational environments cannot turn it on.
     aurora_experimental: bool | None = None
 
+    # Public reports ("denúncias") carry citizens' personal data. Unset ("auto"):
+    # accepted only outside staging/production. Operational environments start
+    # closed until the owner records the LGPD analysis (international transfer:
+    # Railway has no Brazilian region) and opens them explicitly.
+    public_reports_enabled: bool | None = None
+
     # A source whose last successful ingestion is older than this is "stale".
     # Three cron intervals (15 min) plus margin for the providers' own latency.
     orbital_stale_after_minutes: int = Field(default=60, ge=5, le=10080)
@@ -214,6 +220,12 @@ class Settings(BaseSettings):
         if self.aurora_experimental is None:
             return not self.is_operational
         return self.aurora_experimental and not self.is_operational
+
+    @property
+    def public_reports_accepting(self) -> bool:
+        if self.public_reports_enabled is None:
+            return not self.is_operational
+        return self.public_reports_enabled
 
     @property
     def demo_seed_allowed(self) -> bool:

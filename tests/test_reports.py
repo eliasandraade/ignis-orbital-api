@@ -204,3 +204,67 @@ async def test_get_report_not_found(client, db_report_not_found):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Intake gate: personal data is not collected in staging/production by default
+# ---------------------------------------------------------------------------
+
+REPORT_PAYLOAD = {
+    "type": "fire",
+    "description": "Fumaça vista perto da estrada estadual",
+    "urgency": "high",
+    "latitude": -3.7,
+    "longitude": -38.5,
+    "reporter_name": "Pessoa Teste",
+    "contact": "pessoa@example.org",
+    "is_anonymous": False,
+}
+
+
+def _settings_with(monkeypatch, **update):
+    import app.reports.router as reports_router
+    from app.config import get_settings
+
+    patched = get_settings().model_copy(update=update)
+    monkeypatch.setattr(reports_router, "get_settings", lambda: patched)
+    return patched
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.asyncio
+async def test_operational_environments_do_not_accept_reports_by_default(client, monkeypatch, env):
+    mock_db = AsyncMock()
+
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        settings = _settings_with(monkeypatch, app_env=env, public_reports_enabled=None)
+        assert settings.public_reports_accepting is False
+        intake = await client.get("/api/v1/reports/intake")
+        assert intake.status_code == 200
+        assert intake.json()["accepting"] is False
+        assert "193" in intake.json()["message"]
+        response = await client.post("/api/v1/reports", json=REPORT_PAYLOAD)
+        assert response.status_code == 503
+        # Nothing reached the database: no personal data stored, no audit row.
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_intake_opens_only_by_explicit_decision(client, monkeypatch):
+    settings = _settings_with(monkeypatch, app_env="staging", public_reports_enabled=True)
+    assert settings.public_reports_accepting is True
+    intake = await client.get("/api/v1/reports/intake")
+    assert intake.json() == {"accepting": True, "message": None}
+
+
+def test_development_accepts_reports_by_default():
+    from app.config import get_settings
+
+    assert get_settings().public_reports_accepting is True
