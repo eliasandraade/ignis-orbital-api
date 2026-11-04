@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "source": "IBGE",
+  "product": "Malha Municipal Digital",
+  "version": "2025",
+  "reference_date": "2025-04-30",
+  "reference_date_note": "Quadro territorial vigente em 30/04/2025 (data de referência da Malha Municipal 2025, conforme a página de Áreas dos Municípios do IBGE).",
+  "source_crs": "EPSG:4674",
+  "target_crs": "EPSG:4326",
+  "documentation_url": "https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais/15774-malhas.html",
+  "license_note": "Arquivos públicos do IBGE. Uso condicionado à Nota Metodológica 'Malha Municipal Digital e Áreas Territoriais 2025: informações técnicas e legais para a utilização dos dados publicados'. A malha tem finalidade estatística: o IBGE não define nem demarca limites legais.",
+  "state": {
+    "ibge_code": "23",
+    "abbreviation": "CE",
+    "expected_municipalities": 184
+  },
+  "files": [
+    {
+      "role": "municipalities",
+      "name": "CE_Municipios_2025.zip",
+      "url": "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2025/UFs/CE/CE_Municipios_2025.zip",
+      "server_modified_at": "2026-02-26",
+      "sha256": "969c8b928f9b0945a3bf18b2411b027b0cc35428932063f0cb8df8f526fd2d66",
+      "bytes": 3410139,
+      "layer": "CE_Municipios_2025"
+    },
+    {
+      "role": "state",
+      "name": "CE_UF_2025.zip",
+      "url": "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2025/UFs/CE/CE_UF_2025.zip",
+      "server_modified_at": "2026-02-26",
+      "sha256": "e71b3df6f8b62807a5a62dde127185fe214f7b3ee05edbcf52a11ef87e780aab",
+      "bytes": 121027,
+      "layer": "CE_UF_2025"
+    }
+  ],
+  "retrieved_at": "2026-11-03"
+}
