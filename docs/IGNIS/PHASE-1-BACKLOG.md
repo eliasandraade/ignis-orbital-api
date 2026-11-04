@@ -45,6 +45,12 @@ flowchart LR
 - **Esforço:** P.
 
 ### P0-03 — Modelo de detecções orbitais (PostGIS)
+> **Implementado na Sprint 1.1** com ajustes (migration `a013_geo_foundation`, ver [SPRINT-1.1-DELIVERY](SPRINT-1.1-DELIVERY.md) §3):
+> - sem `is_demo`: detecção demonstrativa não é gravada;
+> - sem `area_id` até existir base oficial de UCs;
+> - `jurisdiction_id` obrigatório;
+> - contadores com constraints de balanço.
+
 - Migration aditiva `a013_create_orbital_detections` com as tabelas:
   - `orbital_detections`, com as colunas:
     - `id uuid pk`;

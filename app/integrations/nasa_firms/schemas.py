@@ -37,7 +37,7 @@ class OrbitalAlertListResponse(BaseModel):
     since: str | None = None
     cached_at: str | None = None
     data_origin: Literal["nasa_firms", "demo", "none"] = "none"
-    # Nenhum alerta é gravado em banco nesta versão (sem tabela orbital_alerts).
+    # Este endpoint ainda não lê nem grava orbital_detections (Sprints 1.2/1.3).
     persisted: bool = False
     fetched_at: str | None = None
     message: str | None = None

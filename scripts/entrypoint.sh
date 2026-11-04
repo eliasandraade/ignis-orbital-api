@@ -2,9 +2,10 @@
 # Usage: entrypoint.sh [api|migrate]
 #   api      (default) wait for the database, optionally migrate, run the demo
 #            seed where allowed, then serve HTTP.
-#   migrate  wait for the database, apply migrations and exit. Railway runs it
-#            as the pre-deploy command: once per deploy, before any replica of
-#            the new version starts, and a failure aborts the deploy.
+#   migrate  wait for the database, apply migrations, load the official IBGE
+#            boundaries (idempotent) and exit. Railway runs it as the
+#            pre-deploy command: once per deploy, before any replica of the new
+#            version starts, and a failure aborts the deploy.
 set -euo pipefail
 
 # A platform may either replace the image ENTRYPOINT with the configured
@@ -52,6 +53,10 @@ asyncio.run(check())
 migrate() {
     echo "==> [IGNIS Orbital API] Aplicando migrations..."
     alembic upgrade head
+    # Official reference data, not demo data: required in every environment.
+    # A file whose SHA-256 differs from the manifest aborts the deploy.
+    echo "==> [IGNIS Orbital API] Conferindo jurisdições oficiais (IBGE)..."
+    python -m seed.jurisdictions
 }
 
 case "$ROLE" in

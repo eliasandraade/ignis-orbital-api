@@ -42,7 +42,8 @@ Data: 03/11/2026. Classificação de cada informação que o IGNIS exibe ou pode
 | Open-Meteo histórico / previsão | Correlação meteorológica e previsão de risco | 1–2 | |
 | INMET (estações) | Validação meteorológica oficial | 2 | Avaliar API e licenciamento |
 | FUNCEME (Ceará) | Dados meteorológicos estaduais | 2 | Depende de parceria |
-| Limites oficiais de UCs (ICMBio/CNUC, SEMA-CE) e municípios (IBGE) | Geometrias reais e chave municipal (código IBGE) | 1 | Substituir os polígonos estimados |
+| Limites oficiais de UCs (ICMBio/CNUC, SEMA-CE) | Geometrias reais das unidades de conservação | 1 | Substituir os polígonos estimados |
+| **IBGE — Malha Municipal Digital 2025** (CE: 184 municípios + UF) | Jurisdições oficiais (código IBGE) | 1 | **Integrada na Sprint 1.1**: arquivos versionados com SHA-256 em `data/reference/ibge/`, referência 30/04/2025 |
 | Sistemas de despacho do CBMCE / Defesa Civil | Equipes, viaturas e ocorrências reais | 4–5 | **Somente com parceria formal e autorização**. Nada disso existe hoje |
 
 ## 5. Regras de rastreabilidade (obrigatórias a partir da Fase 1)
