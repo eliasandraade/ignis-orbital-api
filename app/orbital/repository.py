@@ -2,13 +2,20 @@
 
 Every function works inside the caller's transaction and never commits: a
 batch's rows and its counters become visible together or not at all.
+
+Liveness of a running execution is a lease, not a clock: the process that
+owns a run holds a session-level advisory lock keyed by the run id on its
+own connection (acquire_lease). PostgreSQL releases that lock when the
+owner's connection ends for any reason (normal exit, crash, SIGKILL, lost
+network), so recover_abandoned_runs only closes runs whose owner is gone,
+however long a live one has been working.
 """
 
 import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -46,6 +53,72 @@ class BatchResult:
     duplicate: int
 
 
+_LEASE_KEY = "hashtextextended('ignis:ingestion_run:' || CAST(CAST(:run_id AS uuid) AS text), 0)"
+
+
+async def acquire_lease(session: AsyncSession, run_id: uuid.UUID) -> None:
+    """Take the run's session-level lock on this session's connection.
+
+    The connection must stay open (and not be returned to a pool) for as long
+    as the run is in progress; it survives commits, so no transaction has to
+    stay open while the owner talks to external providers.
+    """
+    acquired = await session.scalar(
+        text(f"SELECT pg_try_advisory_lock({_LEASE_KEY})"), {"run_id": run_id}
+    )
+    if not acquired:  # a fresh random id is never locked; refuse to share it
+        raise RunAlreadyActiveError(f"lease de {run_id} já pertence a outro processo")
+
+
+async def release_lease(session: AsyncSession, run_id: uuid.UUID) -> None:
+    await session.execute(text(f"SELECT pg_advisory_unlock({_LEASE_KEY})"), {"run_id": run_id})
+
+
+async def recover_abandoned_runs(
+    session: AsyncSession, source: DetectionSource, product: str
+) -> list[uuid.UUID]:
+    """Close the running executions of (source, product) whose owner is gone.
+
+    A run is abandoned only when its lease can be taken, i.e. no live
+    connection holds it. A run that is still working is never touched,
+    whatever its age. Recovered runs become 'error'/'abandoned' with their
+    counters intact: what they committed stays stored and counted.
+    """
+    running = (
+        await session.scalars(
+            select(IngestionRun.id)
+            .where(
+                IngestionRun.source == DetectionSource(source).value,
+                IngestionRun.product == product,
+                IngestionRun.status == RunStatus.RUNNING.value,
+            )
+            .with_for_update(skip_locked=True)
+        )
+    ).all()
+    recovered = []
+    for run_id in running:
+        owner_gone = await session.scalar(
+            text(f"SELECT pg_try_advisory_xact_lock({_LEASE_KEY})"), {"run_id": run_id}
+        )
+        if owner_gone:
+            recovered.append(run_id)
+    if recovered:
+        await session.execute(
+            update(IngestionRun)
+            .where(IngestionRun.id.in_(recovered))
+            .values(
+                status=RunStatus.ERROR.value,
+                finished_at=datetime.now(UTC),
+                error_code="abandoned",
+                error_message=(
+                    "Execução interrompida sem finalizar: o processo dono encerrou "
+                    "ou perdeu a conexão com o banco."
+                ),
+            )
+        )
+    return recovered
+
+
 async def start_run(
     session: AsyncSession,
     source: DetectionSource,
@@ -55,13 +128,16 @@ async def start_run(
     window: TimeWindow | None = None,
     triggered_by_user_id: uuid.UUID | None = None,
     params: dict | None = None,
+    run_id: uuid.UUID | None = None,
 ) -> IngestionRun:
     """Register a running execution, or raise RunAlreadyActiveError.
 
     The partial unique index uq_ingestion_runs_one_running is the guard, so
     the check holds across processes and replicas, not only in this one.
+    Pass the run_id whose lease the caller already holds (acquire_lease).
     """
     run = IngestionRun(
+        id=run_id or uuid.uuid4(),
         source=DetectionSource(source).value,
         product=product,
         trigger=trigger,
@@ -96,12 +172,16 @@ WITH input AS (
         CAST(:longitudes AS float8[]),
         CAST(:latitudes AS float8[]),
         CAST(:confidences AS text[]),
+        CAST(:confidence_pcts AS int[]),
         CAST(:frps AS float8[]),
         CAST(:brightness AS float8[]),
+        CAST(:brightness_channels AS text[]),
         CAST(:daynights AS text[]),
+        CAST(:provider_ids AS text[]),
         CAST(:raws AS text[])
     ) AS t(dedup_key, product, satellite, instrument, observed_at, longitude, latitude,
-           confidence, frp_mw, brightness_k, daynight, raw)
+           confidence, confidence_pct, frp_mw, brightness_k, brightness_channel, daynight,
+           provider_record_id, raw)
 ),
 located AS (
     SELECT i.*, ST_SetSRID(ST_MakePoint(i.longitude, i.latitude), 4326) AS location
@@ -122,11 +202,12 @@ scoped AS (
 inserted AS (
     INSERT INTO orbital_detections (
         dedup_key, source, product, satellite, instrument, observed_at, location,
-        confidence, frp_mw, brightness_k, daynight, jurisdiction_id, ingestion_run_id, raw
+        confidence, confidence_pct, frp_mw, brightness_k, brightness_channel, daynight,
+        provider_record_id, jurisdiction_id, ingestion_run_id, raw
     )
     SELECT dedup_key, CAST(:source AS text), product, satellite, instrument, observed_at,
-           location, confidence, frp_mw, brightness_k, daynight, jid, CAST(:run_id AS uuid),
-           CAST(raw AS jsonb)
+           location, confidence, confidence_pct, frp_mw, brightness_k, brightness_channel,
+           daynight, provider_record_id, jid, CAST(:run_id AS uuid), CAST(raw AS jsonb)
     FROM scoped
     WHERE jid IS NOT NULL
     -- One global lock order: overlapping batches written concurrently in
@@ -198,9 +279,12 @@ async def persist_batch(
                     "longitudes": [d.longitude for d in detections],
                     "latitudes": [d.latitude for d in detections],
                     "confidences": [d.confidence for d in detections],
+                    "confidence_pcts": [d.confidence_pct for d in detections],
                     "frps": [d.frp_mw for d in detections],
                     "brightness": [d.brightness_k for d in detections],
+                    "brightness_channels": [d.brightness_channel for d in detections],
                     "daynights": [d.daynight for d in detections],
+                    "provider_ids": [d.provider_record_id for d in detections],
                     "raws": [json.dumps(dict(d.raw), default=str) for d in detections],
                 },
             )
@@ -238,7 +322,9 @@ async def finish_run(
     *,
     error_code: str | None = None,
     error_message: str | None = None,
+    params: dict | None = None,
 ) -> IngestionRun:
+    """Freeze a run. `params` is merged into the run's params (provenance)."""
     if status not in FINAL_STATUSES:
         raise ValueError(f"status final inválido: {status!r}")
     run = await _lock_running(session, run_id)
@@ -246,32 +332,23 @@ async def finish_run(
     run.finished_at = datetime.now(UTC)
     run.error_code = error_code
     run.error_message = error_message[:ERROR_MESSAGE_MAX] if error_message else None
+    if params:
+        run.params = {**(run.params or {}), **params}
     await session.flush()
     return run
 
 
-async def abandon_stale_runs(
-    session: AsyncSession, source: DetectionSource, product: str, older_than: timedelta
-) -> int:
-    """Close runs left 'running' by a crashed process, so the next can start.
-
-    They become 'error' with their counters intact: whatever they committed
-    stays stored and counted.
-    """
-    now = datetime.now(UTC)
-    result = await session.execute(
-        update(IngestionRun)
+async def last_successful_params(
+    session: AsyncSession, source: DetectionSource, product: str
+) -> dict | None:
+    """Provenance of the latest 'ok' run, for conditional requests (ETag)."""
+    return await session.scalar(
+        select(IngestionRun.params)
         .where(
             IngestionRun.source == DetectionSource(source).value,
             IngestionRun.product == product,
-            IngestionRun.status == RunStatus.RUNNING.value,
-            IngestionRun.started_at < now - older_than,
+            IngestionRun.status == RunStatus.OK.value,
         )
-        .values(
-            status=RunStatus.ERROR.value,
-            finished_at=now,
-            error_code="abandoned",
-            error_message="Execução interrompida sem finalizar (processo encerrado).",
-        )
+        .order_by(IngestionRun.finished_at.desc())
+        .limit(1)
     )
-    return result.rowcount or 0

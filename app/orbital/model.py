@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     func,
     text,
@@ -137,6 +138,22 @@ class OrbitalDetection(Base):
         CheckConstraint(
             "brightness_k IS NULL OR brightness_k > 0", name="ck_orbital_detections_brightness"
         ),
+        CheckConstraint(
+            "confidence_pct IS NULL OR confidence_pct BETWEEN 0 AND 100",
+            name="ck_orbital_detections_confidence_pct_range",
+        ),
+        CheckConstraint(
+            "brightness_channel IS NULL OR brightness_channel IN ('VIIRS_I4', 'MODIS_21_22')",
+            name="ck_orbital_detections_brightness_channel_known",
+        ),
+        CheckConstraint(
+            "(brightness_k IS NULL) = (brightness_channel IS NULL)",
+            name="ck_orbital_detections_brightness_has_channel",
+        ),
+        CheckConstraint(
+            "confidence IS NULL OR confidence_pct IS NULL",
+            name="ck_orbital_detections_one_confidence_kind",
+        ),
         Index("ix_orbital_detections_location", "location", postgresql_using="gist"),
         Index("ix_orbital_detections_observed_at", "observed_at"),
         Index("ix_orbital_detections_source_observed_at", "source", "observed_at"),
@@ -155,9 +172,15 @@ class OrbitalDetection(Base):
     location: Mapped[WKBElement] = mapped_column(
         Geometry("POINT", srid=4326, spatial_index=False), nullable=False
     )
+    # VIIRS: class (low/nominal/high). MODIS: confidence_pct (0-100). Never both.
     confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    confidence_pct: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     frp_mw: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     brightness_k: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
+    # Which channel brightness_k was measured in (VIIRS I-4 or MODIS 21/22).
+    brightness_channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # The provider's own record id when it has one (INPE foco_id).
+    provider_record_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     daynight: Mapped[str | None] = mapped_column(String(1), nullable=True)
     jurisdiction_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("jurisdictions.id", ondelete="RESTRICT"), nullable=False

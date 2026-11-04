@@ -40,6 +40,11 @@ FINAL_STATUSES = frozenset(RunStatus) - {RunStatus.RUNNING}
 Trigger = Literal["schedule", "manual"]
 Confidence = Literal["low", "nominal", "high"]
 DayNight = Literal["D", "N"]
+# The channel a brightness temperature was measured in. FIRMS documents VIIRS
+# bright_ti4 (I-4) and MODIS brightness (channels 21/22): different bands,
+# kept apart rather than treated as one comparable number.
+BrightnessChannel = Literal["VIIRS_I4", "MODIS_21_22"]
+BBox = tuple[float, float, float, float]
 
 # Request envelope only (lon_min, lat_min, lon_max, lat_max), slightly larger
 # than the IBGE 2025 extent of Ceará. The official polygons decide scope.
@@ -109,10 +114,15 @@ class NormalizedDetection:
     observed_at: datetime  # acquisition instant, timezone-aware
     latitude: float
     longitude: float
+    # VIIRS reports a class; MODIS a 0-100 percentage with no published class
+    # boundaries. A provider fills the one its sensor reports, never both.
     confidence: Confidence | None = None
-    frp_mw: float | None = None
+    confidence_pct: int | None = None
+    frp_mw: float | None = None  # pixel-integrated fire radiative power, MW
     brightness_k: float | None = None
+    brightness_channel: BrightnessChannel | None = None
     daynight: DayNight | None = None
+    provider_record_id: str | None = None  # the provider's own id (INPE foco_id)
     # The source row as received (no secrets: providers strip request URLs/keys).
     raw: Mapping[str, Any] = field(default_factory=dict)
 
@@ -130,8 +140,18 @@ class NormalizedDetection:
             "confidence": self.confidence in (None, "low", "nominal", "high"),
             "daynight": self.daynight in (None, "D", "N"),
             "frp_mw": self.frp_mw is None or _in_range(self.frp_mw, 0, math.inf),
+            "confidence_pct": self.confidence_pct is None
+            or (
+                isinstance(self.confidence_pct, int)
+                and 0 <= self.confidence_pct <= 100
+                and self.confidence is None
+            ),
             "brightness_k": self.brightness_k is None
             or (_in_range(self.brightness_k, 0, math.inf) and self.brightness_k > 0),
+            "brightness_channel": self.brightness_channel in (None, "VIIRS_I4", "MODIS_21_22")
+            and (self.brightness_channel is None) == (self.brightness_k is None),
+            "provider_record_id": self.provider_record_id is None
+            or _is_label(self.provider_record_id),
         }
         for name, ok in checks.items():
             if not ok:
@@ -153,6 +173,9 @@ class ProviderResult:
     detections: tuple[NormalizedDetection, ...] = ()
     rejected: int = 0  # source rows that failed validation (counted, not stored)
     error_code: str | None = None  # stable, secret-free, e.g. "http_503"
+    # What was requested and received, stored in ingestion_runs.params:
+    # endpoint (never a URL carrying a key), files, sizes, hashes, ETags.
+    provenance: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.rejected < 0:
@@ -162,12 +185,23 @@ class ProviderResult:
 
 
 class DetectionProvider(Protocol):
-    """Implemented in Sprint 1.2 by the FIRMS and INPE clients."""
+    """Implemented by app.orbital.providers (NASA FIRMS, INPE).
+
+    fetch never raises for provider-side trouble (HTTP, timeout, bad payload):
+    it returns status "unavailable" with an error_code. `previous` is the
+    provenance of the last successful run of the same product, so a provider
+    may send conditional requests (ETag) instead of downloading again.
+    """
 
     source: DetectionSource
 
     def products(self) -> tuple[str, ...]: ...
 
     async def fetch(
-        self, product: str, window: TimeWindow, bbox: tuple[float, float, float, float]
+        self,
+        product: str,
+        window: TimeWindow,
+        bbox: BBox,
+        *,
+        previous: Mapping[str, Any] | None = None,
     ) -> ProviderResult: ...
