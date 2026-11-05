@@ -532,9 +532,15 @@ async def test_worker_invalid_configuration_exits_3(geo_database):
 
 
 @pytest.fixture
-async def admin_api(clean_orbital, client):
+async def admin_api(clean_orbital, client, monkeypatch):
     """The real router on the test database, as a real admin user."""
     from app.database import get_db
+    from app.orbital import contracts
+
+    # POST /ingest uses the default window (last 26 h of the real clock), but the
+    # fake server only has the fixtures' day: pin the window to that day, or the
+    # test fails on any later date (a past day without a file is correctly an error).
+    monkeypatch.setattr(contracts.TimeWindow, "last", classmethod(lambda cls, *_a, **_k: WINDOW))
     from app.dependencies import get_current_user
     from app.integrations import orbital_alerts_router as router
     from app.main import app
