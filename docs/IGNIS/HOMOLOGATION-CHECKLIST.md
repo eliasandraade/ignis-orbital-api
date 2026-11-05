@@ -63,7 +63,7 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 
 | # | Verificação | Como | Esperado | Staging 04/11/2026 |
 |---|---|---|---|---|
-| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | Agendados. Produção: 1º diário OK (04/11 21:43 UTC). Staging: 1º diário previsto para 02:06 UTC. **Restauração não testada** |
+| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | Agendados. Produção: 1º diário OK (04/11 21:43 UTC). Staging: 1º diário OK (05/11 02:06 UTC). **Restauração não testada** |
 | H-23 | Rollback | Rollback para o deploy anterior do `ignis-web` | Volta em < 5 min; `/healthz` ok | OK: 8 s para voltar e 8 s para avançar |
 | H-24 | Alertas | Forçar falha | O alerta chega | **Pendente (B8)** |
 | H-37 | Reinício | Restart do `ignis-postgis` e do `ignis-api` | Dados preservados; `/ready` ok | OK (2 s; 320 focos e 184 municípios preservados) |

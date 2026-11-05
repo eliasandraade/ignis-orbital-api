@@ -163,7 +163,7 @@ Outras variáveis:
 
 ## 10. Domínio oficial
 
-Estado medido em 05/11/2026 00:42 UTC (evidência: `evidence/domain-2026-11-05/smoke.txt`).
+Estado medido em 05/11/2026 00:42 UTC (evidência: `evidence/domain-2026-11-05/smoke.txt`). Reconferido em 05/11/2026 por volta de 16:40 UTC, sem mudança: CNAME e TXT no autoritativo, `Verified: yes`, certificado válido e `404 Application not found` em toda rota.
 
 | Etapa | Estado |
 |---|---|
@@ -279,9 +279,16 @@ Encontrados na revisão de 05/11/2026:
 
 | # | Bloqueio | Ação necessária |
 |---|---|---|
-| B9 | **Vercel:** o `vercel.json` que desliga os deploys só entra com o web #6, e o #4 mantém o antigo. O vínculo dos projetos não pôde ser confirmado por esta sessão | Desconectar o repositório **antes** do 1º merge |
+| B9 | **Vercel:** o `vercel.json` que desliga os deploys só entra com o web #6, e o #4 mantém o antigo. O vínculo dos projetos não pôde ser confirmado por esta sessão | Desconectar o repositório **antes** do merge; o runbook usa merge único do topo da pilha |
 | B10 | **Web:** branch padrão é `main`, de histórico sem relação com `master`; o `promote.yml` não pode ser disparado | Tag de arquivamento e troca do padrão para `master` |
 | B11 | **Sem aviso de privacidade** no frontend (nenhuma ocorrência de "privacidade" ou "LGPD" em `src`) | Decisão do proprietário, junto com D-1, antes de divulgar o endereço |
+| B12 | **Restauração de backup não testada (H-22).** Agendamentos ativos nos dois ambientes (diário 6 d, semanal 27 d, mensal 89 d), mas com só 1 backup diário em cada volume até 05/11/2026 | Autorizar o teste: `pg_dump` com chave SSH própria do IGNIS, restaurando num banco descartável, ou restauração do volume de staging |
+| B13 | **SonarCloud do web:** o PR web #8 não tem check de Quality Gate, e o projeto não é encontrado na API pública (pode ser privado). O job "SonarQube Cloud (cobertura)" é pulado | Criar o projeto ou decidir seguir sem ele |
+
+**Medições de 05/11/2026, por volta de 16:40 UTC:**
+- Cron de staging: 86 rodadas desde 04/11 19:16 UTC, intervalo de 12,7 a 17,5 min, todas com `exit_code=0`; INPE `ok` em todas; FIRMS `disabled` por falta de chave.
+- Produção: sem `ignis-ingest`, sem deploy de `ignis-api` e `ignis-web`; `DATABASE_URL`, `JWT_SECRET_KEY` e `POSTGRES_PASSWORD` diferem dos de staging (comparação por hash).
+- Staging e produção: `PUBLIC_REPORTS_ENABLED=false`, `ORBITAL_ALERTS_DEMO_MODE=false`, `SKIP_DEMO_SEED=true`. `POST /api/v1/reports` responde 503 em staging.
 
 Sequência exata: [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md).
 
