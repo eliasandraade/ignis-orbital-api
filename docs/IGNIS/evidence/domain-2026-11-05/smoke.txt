@@ -1,0 +1,44 @@
+Smoke somente leitura — 2026-11-05 00:48 UTC
+
+== Domínio oficial (production, sem deploy de aplicação)
+http -> 301 https://ignis.andradesystems.com.br/
+/                      404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+/healthz               404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+/ready                 404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+/api/v1/auth/me        404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+/admin                 404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+/public/map            404 fallback=true edge=gru1 body='{"status":"error","code":404,"message":"Application not foun'
+
+== Staging (mesmo código a promover)
+/healthz                   200 'ok'
+/health                    200 '{"status":"ok","service":"ignis-orbital-api"}'
+/ready                     200 '{"status":"ready","database":"connected"}'
+/api/v1/reports/intake     200 '{"accepting":false,"message":"O recebimento de denúncias está desativa'
+POST /api/v1/aurora/chat                404 (esperado 404)
+POST /api/v1/orbital-alerts/ingest      401 (esperado 401)
+GET /api/v1/admin/overview             401 (esperado 401)
+GET /api/v1/admin/openapi.json         401 (esperado 401)
+POST /api/v1/reports 503 (esperado 503)
+/docs                      200 spa=True
+/openapi.json              200 spa=True
+CSP connect-src: connect-src 'self' 
+x-frame: DENY hsts: max-age=31536000 nosniff: nosniff
+municípios: 184
+geojson: 200
+fonte: NASA_FIRMS disabled
+fonte: INPE_QUEIMADAS live
+login admin 200
+cockpit: staging connected 580 focos 184 municípios; worker recent_runs
+contas: ['admin.homologacao@example.org', 'campo.homologacao@example.org', 'e2e.*', 'gestor.homologacao@example.org'] ; ativas e2e: 0
+gestor em /admin/overview: 403 (esperado 403)
+
+== DNS (05/11/2026 00:42 UTC)
+Autoritativos ns05 e ns06.domaincontrol.com, dns.google e cloudflare-dns.com:
+  ignis.andradesystems.com.br CNAME bp2zkhvo.up.railway.app
+  _railway-verify.ignis.andradesystems.com.br TXT railway-verify=354acfa0… (igual ao exigido)
+  A resolvido: 69.46.46.112
+Railway: DNS_RECORD_STATUS_PROPAGATED; verified=true; CERTIFICATE_STATUS_TYPE_VALID
+TLS real: CN=ignis.andradesystems.com.br; emissor Let's Encrypt YR1; válido até 02/02/2027; ssl_verify=0
+
+== E2E
+e2e/ignis.spec.ts contra o staging (sem criar contas): 20/20

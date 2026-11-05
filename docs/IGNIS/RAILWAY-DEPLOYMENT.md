@@ -5,7 +5,7 @@ Atualizado em 04/11/2026. Decisão do proprietário: **o IGNIS é hospedado excl
 > **Estado real (04/11/2026):**
 > - O projeto **IGNIS Orbital** existe (`801f5962-4b9a-48dc-a83a-5e8ecb383f81`).
 > - O **staging** está implantado e homologado em `https://ignis-web-staging.up.railway.app`.
-> - A **produção** está provisionada (banco, volume, segredos e domínio anexado), **sem deploy de aplicação**.
+> - A **produção** está provisionada (banco, volume, segredos e domínio com certificado válido), **sem deploy de aplicação**.
 >
 > Os detalhes, IDs, evidências e bloqueios estão em [RAILWAY-PROVISIONING-REPORT.md](RAILWAY-PROVISIONING-REPORT.md).
 
@@ -193,6 +193,8 @@ O Railway espera a CI do commit, migra no pre-deploy e só troca a versão se `/
 4. Executar o HOMOLOGATION-CHECKLIST.
 5. Conferir o HTTPS do domínio.
 
+Sequência completa: [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md).
+
 ## 8. Smoke pós-deploy (same-origin)
 
 ```bash
@@ -238,7 +240,7 @@ curl -sI $WEB/ | grep -i "connect-src 'self'"
 | # | Decisão | Estado |
 |---|---|---|
 | D-1 | Região e LGPD | Região **`us-east4-eqdc4a`** em uso. A transferência internacional fica registrada. Denúncias (dados pessoais) estão **fechadas** (`PUBLIC_REPORTS_ENABLED=false`) até o proprietário registrar a análise LGPD |
-| D-2 | Domínio próprio | `ignis.andradesystems.com.br` no `ignis-web` de produção; DNS na GoDaddy pendente (relatório §10) |
+| D-2 | Domínio próprio | `ignis.andradesystems.com.br` no `ignis-web` de produção; DNS propagado e certificado emitido em 04/11/2026 (relatório §10) |
 | D-3 | `/docs` em produção | Decidido no código: nunca público; especificação só para admin |
 | D-4 | Desconectar o projeto Vercel | Pendente (§6, passo 6) |
 | D-5 | GitGuardian | 33462092, 39541748–39541751, **39592651** e **39592652**: classificar no painel (ADMIN-SECURITY-REVIEW §11) |

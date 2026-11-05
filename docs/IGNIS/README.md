@@ -31,6 +31,7 @@ O inventário de telas fica no repositório do frontend.
 | 23 | [ADMIN-SECURITY-REVIEW.md](ADMIN-SECURITY-REVIEW.md) | backend | Autenticação, RBAC, revogação de sessão, step-up, último admin, concorrência, auditoria, docs da API, riscos residuais |
 | 24 | [ADMIN-VALIDATION-GUIDE.md](ADMIN-VALIDATION-GUIDE.md) | backend | Atualizar a pilha local preservando dados, roteiro manual, testes, resultados |
 | 25 | [RAILWAY-PROVISIONING-REPORT.md](RAILWAY-PROVISIONING-REPORT.md) | backend | **Railway real (04/11/2026):** projeto IGNIS Orbital, ambientes, serviços, região, banco/backup, domínio e DNS, homologação de staging, custos, bloqueios de produção |
+| 26 | [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md) | backend | Pré-requisitos e sequência exata de merge, CI, staging e promoção à produção (não executada) |
 
 ## Repositórios
 

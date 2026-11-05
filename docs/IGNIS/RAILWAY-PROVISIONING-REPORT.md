@@ -163,17 +163,19 @@ Outras variáveis:
 
 ## 10. Domínio oficial
 
-| Etapa | Estado em 04/11/2026 |
-|---|---|
-| Configurado no Railway | **Sim.** `ignis.andradesystems.com.br` em `ignis-web`/production (`syncStatus ACTIVE`) |
-| DNS | **Pendente.** Os servidores autoritativos são da GoDaddy (`ns05/ns06.domaincontrol.com`), sem acesso desta missão. Registros a criar abaixo |
-| DNS propagado | Não (NXDOMAIN no autoritativo) |
-| Verificação de propriedade | Não (`verified: false`) |
-| SSL emitido | Não (`CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP`) |
-| Acessível com HTTPS | Não |
-| Aplicação validada no domínio | Não (produção sem deploy) |
+Estado medido em 05/11/2026 00:42 UTC (evidência: `evidence/domain-2026-11-05/smoke.txt`).
 
-**Registros DNS a criar na zona `andradesystems.com.br`** (GoDaddy → DNS → *Add record*), exatamente como o Railway informou:
+| Etapa | Estado |
+|---|---|
+| Configurado no Railway | **Sim.** `ignis-web`/production, `syncStatus ACTIVE` |
+| DNS criado (GoDaddy) | **Sim.** CNAME e TXT conferidos nos dois autoritativos |
+| DNS propagado | **Sim.** `dns.google` e `cloudflare-dns.com`; Railway: `DNS_RECORD_STATUS_PROPAGATED` |
+| Verificação de propriedade | **Sim** (`verified: true`) |
+| SSL emitido | **Sim.** Let's Encrypt, ECDSA e RSA, válidos até 02/02/2027; TLS real confere; HTTP → HTTPS 301 |
+| Acessível com HTTPS | **Parcial.** O TLS funciona, mas toda rota responde `404 Application not found` (`x-railway-fallback: true`), porque a produção não tem deploy do `ignis-web` |
+| Aplicação validada no domínio | **Não.** Frontend, API, login, cockpit e mapa só puderam ser validados em staging |
+
+**Registros DNS criados na zona `andradesystems.com.br`**, como o Railway informou:
 
 | Tipo | Host (nome) | Valor | TTL | Finalidade |
 |---|---|---|---|---|
@@ -265,7 +267,7 @@ Não use o mecanismo de variável temporária do §7 em produção.
 | # | Bloqueio | Ação necessária |
 |---|---|---|
 | B1 | **Código fora dos branches de implantação.** A produção só implanta do branch `production`, que o `promote.yml` cria a partir de um commit de `main`/`master` com CI verde. A pilha de PRs (api #3→#5→#6→#7→#8→#9; web #4→#6→#7→#8) não está mergeada | Aprovar e mergear a pilha; depois rodar `promote.yml` nos dois repositórios |
-| B2 | **DNS** na GoDaddy | Criar os 2 registros do §10 |
+| B2 | ~~**DNS** na GoDaddy~~ | **Resolvido em 04/11/2026:** registros propagados e certificado emitido (§10) |
 | B3 | **GitGuardian**: incidentes `39592651` (api) e `39592652` (web) mantêm o check vermelho nos PRs | Classificar no painel como *test credential / false positive* (evidência em ADMIN-SECURITY-REVIEW §11); os anteriores 33462092 e 39541748–39541751 seguem pendentes |
 | B4 | **Primeiro admin de produção** | §12 (exige SSH com chave própria; esta missão não registrou chave na conta) |
 | B5 | **D-1 LGPD** | Não bloqueia o portal somente leitura; bloqueia abrir as denúncias (`PUBLIC_REPORTS_ENABLED`) |
@@ -273,11 +275,15 @@ Não use o mecanismo de variável temporária do §7 em produção.
 | B7 | Selar variáveis | Railway → *Variables* → *Seal* em `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` (os dois ambientes) |
 | B8 | Alertas | Configurar notificações de deploy/healthcheck no Railway e um monitor externo de `/healthz` |
 
-Quando B1, B2, B3 e B4 estiverem resolvidos:
-1. Rodar o `promote.yml`.
-2. Acompanhar o deploy de produção.
-3. Executar §12 e o HOMOLOGATION-CHECKLIST em produção.
-4. Verificar o HTTPS no domínio oficial.
+Encontrados na revisão de 05/11/2026:
+
+| # | Bloqueio | Ação necessária |
+|---|---|---|
+| B9 | **Vercel:** o `vercel.json` que desliga os deploys só entra com o web #6, e o #4 mantém o antigo. O vínculo dos projetos não pôde ser confirmado por esta sessão | Desconectar o repositório **antes** do 1º merge |
+| B10 | **Web:** branch padrão é `main`, de histórico sem relação com `master`; o `promote.yml` não pode ser disparado | Tag de arquivamento e troca do padrão para `master` |
+| B11 | **Sem aviso de privacidade** no frontend (nenhuma ocorrência de "privacidade" ou "LGPD" em `src`) | Decisão do proprietário, junto com D-1, antes de divulgar o endereço |
+
+Sequência exata: [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md).
 
 ## 15. Custos (estimativa, sem compromisso)
 
@@ -301,7 +307,9 @@ Premissas:
 | Produção (validação, baixo tráfego, sem ingestão) | ≈ 0,2 GB → US$ 2 | ≈ US$ 0,30 | ≈ US$ 0,25 | < 10 GB → US$ 0,50 | **≈ US$ 3–5/mês** |
 | Produção com ingestão a cada 15 min | + ≈ US$ 0,50 | | | | **≈ US$ 4–6/mês** |
 
-**Total incremental: ≈ US$ 7–12/mês**, dentro do uso incluído se os demais projetos deixarem folga. Recomenda-se um limite de uso no workspace (`railway usage`).
+**Total incremental: ≈ US$ 7–12/mês**, ainda uma estimativa.
+
+**Correção (05/11/2026):** o workspace já consome US$ 44,70 no ciclo (projeção de US$ 55,27), acima dos US$ 20 incluídos. Portanto, **o uso do IGNIS é custo adicional real**, e não coberto pela franquia como a versão anterior deste relatório sugeria. O workspace **não tem limite de uso** (`usageLimit: null`). O IGNIS aparece com US$ 0,03 nas primeiras horas, valor que pode estar defasado.
 
 Por padrão, os serviços podem escalar até o limite do plano (24 vCPU / 24 GB por serviço). Limitar por serviço (`limitOverride`) é a próxima melhoria de proteção de custo.
 

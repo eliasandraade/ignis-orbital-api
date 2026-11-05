@@ -34,7 +34,7 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 | H-27 | FIRMS com chave real | Rodada com `NASA_FIRMS_MAP_KEY` | `records_inserted > 0` | **Pendente**: sem chave; FIRMS `disabled/missing_api_key` |
 | H-28 | Reexecução idempotente | 2ª rodada | 0 novos | OK (INPE: ETag/304, 0 novos) |
 | H-29 | Ingestão manual auditada | `POST /ingest` com token de admin | 202 + `orbital_ingest.requested` | OK |
-| H-30 | Cron de staging | `INGEST.staging.cron = true` no IaC → apply | Execuções agendadas sem `error`; nenhuma `running` > 15 min | Ligado (próxima execução 19:00 UTC); observação de 48 h **pendente** |
+| H-30 | Cron de staging | `INGEST.staging.cron = true` no IaC → apply | Execuções agendadas sem `error`; nenhuma `running` > 15 min | Ligado. Em 05/11 00:42 UTC: 23/23 rodadas INPE `ok` em 5,7 h, intervalos de 12,7–17 min, nenhuma presa. Observação de 48 h **pendente** (até 06/11 19:00 UTC) |
 | H-31 | Recuperação após queda | Restart no meio de uma rodada | A rodada seguinte marca `abandoned` e segue | — |
 | H-32 | Fonte indisponível | URL do INPE inalcançável numa rodada | `unavailable`/`connection_error`, exit 2; o portal mostra "fonte indisponível" e mantém o último sucesso | OK |
 | H-33 | Aurora experimental | `POST $WEB/api/v1/aurora/chat` | 404 | OK |
@@ -63,7 +63,7 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 
 | # | Verificação | Como | Esperado | Staging 04/11/2026 |
 |---|---|---|---|---|
-| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | Backups agendados (diário/semanal/mensal). **Restauração pendente** |
+| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | Agendados. Produção: 1º diário OK (04/11 21:43 UTC). Staging: 1º diário previsto para 02:06 UTC. **Restauração não testada** |
 | H-23 | Rollback | Rollback para o deploy anterior do `ignis-web` | Volta em < 5 min; `/healthz` ok | OK: 8 s para voltar e 8 s para avançar |
 | H-24 | Alertas | Forçar falha | O alerta chega | **Pendente (B8)** |
 | H-37 | Reinício | Restart do `ignis-postgis` e do `ignis-api` | Dados preservados; `/ready` ok | OK (2 s; 320 focos e 184 municípios preservados) |
@@ -72,7 +72,8 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 ## F. Publicação da versão de validação em produção
 
 - [ ] B1: pilha de PRs mergeada; `promote.yml` executado nos dois repositórios.
-- [ ] B2: DNS (CNAME + TXT) criado; `railway domain status` com `verified: true` e certificado emitido.
+- [x] B2: DNS (CNAME + TXT) criado; `railway domain status` com `verified: true` e certificado emitido (05/11/2026).
+- [ ] B9/B10: Vercel desconectada; `master` como branch padrão do web (PRODUCTION-PROMOTION-RUNBOOK §0).
 - [ ] B3: incidentes GitGuardian classificados; CI dos PRs verde.
 - [ ] B4: primeiro admin de produção criado pelo proprietário (§12 do relatório); `demo_users check` exit 0.
 - [ ] A–E repetidos em produção, exceto H-06, H-12 e H-16, que podem usar as evidências de staging.
