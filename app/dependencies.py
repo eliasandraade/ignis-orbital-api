@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,13 @@ ROLE_LEVELS: dict[str, int] = {
 bearer_scheme = HTTPBearer()
 
 
+# While an administrative reset is pending, the account can only read itself
+# and choose a new password; every other endpoint answers 403.
+PASSWORD_CHANGE_ALLOWED_PATHS = frozenset({"/api/v1/auth/me", "/api/v1/auth/change-password"})
+
+
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ):
@@ -45,6 +51,11 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise CredentialsException()
+    # Tokens issued before a role change, deactivation or reset are revoked.
+    if int(payload.get("sv", 0)) != user.session_version:
+        raise CredentialsException()
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
+        raise ForbiddenException("Troca de senha obrigatória antes de continuar")
     return user
 
 

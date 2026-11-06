@@ -15,9 +15,9 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC
 
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -108,7 +108,7 @@ async def recover_abandoned_runs(
             .where(IngestionRun.id.in_(recovered))
             .values(
                 status=RunStatus.ERROR.value,
-                finished_at=datetime.now(UTC),
+                finished_at=_db_finish_time(),
                 error_code="abandoned",
                 error_message=(
                     "Execução interrompida sem finalizar: o processo dono encerrou "
@@ -315,6 +315,17 @@ async def persist_batch(
     return result
 
 
+def _db_finish_time():
+    """End instant from the database clock, never before the start.
+
+    started_at comes from the database (server default now()); taking the end
+    from the application clock failed the finished_at >= started_at check
+    whenever the API host ran slightly behind the database host, leaving the
+    run stuck in 'running'.
+    """
+    return func.greatest(func.clock_timestamp(), IngestionRun.started_at)
+
+
 async def finish_run(
     session: AsyncSession,
     run_id: uuid.UUID,
@@ -329,12 +340,13 @@ async def finish_run(
         raise ValueError(f"status final inválido: {status!r}")
     run = await _lock_running(session, run_id)
     run.status = RunStatus(status).value
-    run.finished_at = datetime.now(UTC)
+    run.finished_at = _db_finish_time()
     run.error_code = error_code
     run.error_message = error_message[:ERROR_MESSAGE_MAX] if error_message else None
     if params:
         run.params = {**(run.params or {}), **params}
     await session.flush()
+    await session.refresh(run, ["finished_at"])
     return run
 
 

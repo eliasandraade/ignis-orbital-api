@@ -26,6 +26,14 @@ O inventário de telas fica no repositório do frontend.
 | 18 | [READY-FOR-HUMAN-VALIDATION.md](READY-FOR-HUMAN-VALIDATION.md) | backend | **Estado para validação humana** (Sprints 1.3/1.4): o que está pronto, parcial e indisponível; classificação final |
 | 19 | [HUMAN-VALIDATION-GUIDE.md](HUMAN-VALIDATION-GUIDE.md) | backend | Guia do avaliador: subir a pilha local, jornada, falhas, integridade, E2E e checklist de aceitação |
 | 20 | [HUMAN-VALIDATION-RESULTS.md](HUMAN-VALIDATION-RESULTS.md) | backend | Testes realmente executados, evidências, defeitos encontrados e corrigidos, limitações |
+| 21 | [PRODUCT-PROFESSIONALIZATION.md](PRODUCT-PROFESSIONALIZATION.md) | backend | **IGNIS Orbital by Andrade Systems**: referências acadêmicas removidas, mocks eliminados (interface só API), funcionalidades fora da navegação, mapa de navegação |
+| 22 | [ADMIN-COCKPIT.md](ADMIN-COCKPIT.md) | backend | Admin Cockpit: telas, endpoints, migração a015, capturas reais |
+| 23 | [ADMIN-SECURITY-REVIEW.md](ADMIN-SECURITY-REVIEW.md) | backend | Autenticação, RBAC, revogação de sessão, step-up, último admin, concorrência, auditoria, docs da API, riscos residuais |
+| 24 | [ADMIN-VALIDATION-GUIDE.md](ADMIN-VALIDATION-GUIDE.md) | backend | Atualizar a pilha local preservando dados, roteiro manual, testes, resultados |
+| 25 | [RAILWAY-PROVISIONING-REPORT.md](RAILWAY-PROVISIONING-REPORT.md) | backend | **Railway real (04/11/2026):** projeto IGNIS Orbital, ambientes, serviços, região, banco/backup, domínio e DNS, homologação de staging, custos, bloqueios de produção |
+| 26 | [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md) | backend | Pré-requisitos e sequência exata de merge, CI, staging e promoção à produção (não executada) |
+| 26a | [PRIVACY-NOTICE-DRAFT.md](PRIVACY-NOTICE-DRAFT.md) | backend | Rascunho do aviso de privacidade, aguardando dados e aprovação do proprietário |
+| 26b | [PRIVACY-DATA-MAP.md](PRIVACY-DATA-MAP.md) | backend | Dados armazenados, prazos técnicos, papéis a confirmar e transferência internacional |
 
 ## Repositórios
 

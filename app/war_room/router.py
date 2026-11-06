@@ -14,7 +14,7 @@ from app.dependencies import require_role
 from app.incidents import service as incident_service
 from app.incidents.schemas import IncidentRead, WarRoomSummary
 
-router = APIRouter(prefix="/api/v1/war-room", tags=["war-room"])
+router = APIRouter(prefix="/api/v1/war-room", tags=["sala de crise"])
 
 
 @router.get("", response_model=WarRoomSummary)

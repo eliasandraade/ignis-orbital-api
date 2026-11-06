@@ -15,9 +15,8 @@ from app.config import get_settings
 settings = get_settings()
 
 _HEADERS = {
-    "User-Agent": (
-        "IGNIS-Orbital/1.0 (FIAP GS 2026; academic project; contact: oeliasandraade@gmail.com)"
-    ),
+    # Nominatim's usage policy asks for an identifying agent with a contact URL.
+    "User-Agent": "IGNIS-Orbital/1.0 (Andrade Systems; +https://github.com/eliasandraade/ignis-orbital-api)",
     "Accept-Language": "pt-BR,pt;q=0.9",
 }
 

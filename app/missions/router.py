@@ -11,7 +11,7 @@ from app.dependencies import require_role
 from app.missions import service as missions_service
 from app.missions.schemas import MissionCreate, MissionRead, MissionStatusUpdate, MissionUpdate
 
-router = APIRouter(prefix="/api/v1/missions", tags=["missions"])
+router = APIRouter(prefix="/api/v1/missions", tags=["missões"])
 
 
 @router.get("", response_model=Page[MissionRead])

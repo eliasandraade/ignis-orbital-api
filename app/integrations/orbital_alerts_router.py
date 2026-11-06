@@ -22,7 +22,7 @@ from app.orbital.read_schemas import DetectionDetail, DetectionPage, DetectionSt
 from app.orbital.schemas import IngestAccepted, IngestionRunRead, IngestRequest, StartedRun
 
 logger = logging.getLogger("ignis.ingestion")
-router = APIRouter(prefix="/api/v1/orbital-alerts", tags=["orbital-alerts"])
+router = APIRouter(prefix="/api/v1/orbital-alerts", tags=["focos de calor"])
 
 
 def get_ingestion_engine() -> AsyncEngine:

@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, production]
+    branches: [main, staging, production]
 
 permissions:
   contents: read
@@ -286,7 +286,7 @@ jobs:
     env:
       # The other repository's branch to integrate with (a repository variable
       # overrides it once the human-validation branches are merged).
-      OTHER_REF: ${{ vars.IGNIS_WEB_REF || 'feat/ignis-human-validation' }}
+      OTHER_REF: ${{ vars.IGNIS_WEB_REF || 'feat/ignis-admin-cockpit' }}
       IGNIS_WEB_DIR: ${{ github.workspace }}/web
       # Deterministic data: the documented INPE sample, never the live server.
       IGNIS_INGEST: fixture

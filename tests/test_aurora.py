@@ -22,6 +22,8 @@ def make_fake_campo() -> MagicMock:
     user.email = "campo@test.com"
     user.role = "campo"
     user.is_active = True
+    user.session_version = 0
+    user.must_change_password = False
     return user
 
 
@@ -160,3 +162,41 @@ async def test_analyze_requires_auth(client):
         json={"incident_severity": "low"},
     )
     assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Exposure: experimental, never mounted in staging/production
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("forced", [None, True])
+@pytest.mark.asyncio
+async def test_aurora_is_not_mounted_in_operational_environments(monkeypatch, env, forced):
+    from httpx import ASGITransport, AsyncClient
+
+    import app.main as main
+
+    operational = main.settings.model_copy(update={"app_env": env, "aurora_experimental": forced})
+    assert operational.aurora_enabled is False  # cannot be forced on
+    monkeypatch.setattr(main, "settings", operational)
+    hardened = main.create_app()
+    paths = {getattr(r, "path", "") for r in hardened.routes}
+    assert not any(p.startswith("/api/v1/aurora") for p in paths)
+    assert not any(p.startswith("/api/v1/aurora") for p in hardened.openapi()["paths"])
+
+    token = create_access_token(str(CAMPO_USER_ID), "campo")
+    async with AsyncClient(transport=ASGITransport(app=hardened), base_url="http://t") as c:
+        for headers in ({}, {"Authorization": f"Bearer {token}"}):
+            body = {"message": "incêndio"}
+            chat = await c.post("/api/v1/aurora/chat", json=body, headers=headers)
+            assert chat.status_code == 404
+            analyze = await c.post("/api/v1/aurora/analyze", json={}, headers=headers)
+            assert analyze.status_code == 404
+
+
+def test_aurora_can_be_turned_off_outside_operational_environments():
+    from app.main import settings
+
+    assert settings.aurora_enabled is True  # development/test: mounted by default
+    assert settings.model_copy(update={"aurora_experimental": False}).aurora_enabled is False

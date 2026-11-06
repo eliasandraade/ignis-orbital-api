@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.orbital import repository
-from app.orbital.contracts import DetectionSource, ProviderResult
+from app.orbital.contracts import DetectionSource, ProviderResult, RunStatus
 from app.orbital.ingestion import IngestionRound
 from app.orbital.model import IngestionRun
 from app.orbital.providers._http import RequestSpacer, RetryPolicy
@@ -532,9 +532,15 @@ async def test_worker_invalid_configuration_exits_3(geo_database):
 
 
 @pytest.fixture
-async def admin_api(clean_orbital, client):
+async def admin_api(clean_orbital, client, monkeypatch):
     """The real router on the test database, as a real admin user."""
     from app.database import get_db
+    from app.orbital import contracts
+
+    # POST /ingest uses the default window (last 26 h of the real clock), but the
+    # fake server only has the fixtures' day: pin the window to that day, or the
+    # test fails on any later date (a past day without a file is correctly an error).
+    monkeypatch.setattr(contracts.TimeWindow, "last", classmethod(lambda cls, *_a, **_k: WINDOW))
     from app.dependencies import get_current_user
     from app.integrations import orbital_alerts_router as router
     from app.main import app
@@ -776,3 +782,35 @@ async def test_fixture_runs_are_marked_and_keep_original_times(clean_orbital, ge
         " FROM orbital_detections",
     )
     assert days == "2026-11-03"  # the sample's own day, never "today"
+
+
+async def test_finish_uses_the_database_clock_even_when_the_host_lags(clean_orbital):
+    """A run started by the database clock slightly ahead of the API host must
+    still finish: finished_at comes from the database and never precedes
+    started_at (regression: CheckViolation left runs stuck in 'running')."""
+    from app.orbital.providers.inpe import PRODUCT
+
+    engine = clean_orbital
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        run = await repository.start_run(
+            session, DetectionSource.INPE_QUEIMADAS, PRODUCT, trigger="manual"
+        )
+        run_id = run.id
+        await session.execute(
+            text(
+                "UPDATE ingestion_runs SET started_at = now() + interval '2 seconds' WHERE id = :i"
+            ),
+            {"i": run_id},
+        )
+        await session.commit()
+        finished = await repository.finish_run(session, run_id, RunStatus.OK)
+        await session.commit()
+        assert finished.finished_at is not None
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT status, finished_at >= started_at FROM ingestion_runs WHERE id = :i"),
+                {"i": run_id},
+            )
+        ).one()
+    assert tuple(row) == ("ok", True)

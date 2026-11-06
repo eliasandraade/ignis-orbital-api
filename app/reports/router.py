@@ -1,8 +1,9 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.audit import log_action
 from app.core.enums import ReportStatus, ReportType, ReportUrgency, UserRole
 from app.core.pagination import Page
@@ -12,14 +13,32 @@ from app.dependencies import require_role
 from app.reports import service as report_service
 from app.reports.schemas import ReportCreate, ReportRead, ReportStatusPublic, ReportStatusUpdate
 
-router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+router = APIRouter(prefix="/api/v1/reports", tags=["denúncias"])
+
+INTAKE_CLOSED_MESSAGE = (
+    "O recebimento de denúncias está desativado nesta instalação. Em caso de incêndio, "
+    "acione o Corpo de Bombeiros (193) ou a Defesa Civil (199)."
+)
+
+
+def _require_intake_open() -> None:
+    if not get_settings().public_reports_accepting:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=INTAKE_CLOSED_MESSAGE)
+
+
+@router.get("/intake")
+async def report_intake() -> dict:
+    """Informa se esta instalação recebe denúncias públicas (sem dados pessoais)."""
+    accepting = get_settings().public_reports_accepting
+    return {"accepting": accepting, "message": None if accepting else INTAKE_CLOSED_MESSAGE}
 
 
 @router.post(
     "",
     response_model=ReportRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(rate_limit("report-submit", limit=10))],
+    dependencies=[Depends(_require_intake_open), Depends(rate_limit("report-submit", limit=10))],
+    responses={503: {"description": "Recebimento de denúncias desativado nesta instalação"}},
 )
 async def submit_report(
     body: ReportCreate,

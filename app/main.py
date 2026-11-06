@@ -1,3 +1,4 @@
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -32,20 +33,82 @@ async def lifespan(app: FastAPI):
     yield
 
 
+DESCRIPTION = """
+API do **IGNIS Orbital**, plataforma de monitoramento de focos de calor e apoio à
+gestão de ocorrências ambientais, desenvolvida pela **Andrade Systems**.
+
+**Autenticação.** `POST /api/v1/auth/login` devolve um token JWT; envie-o em
+`Authorization: Bearer <token>`. O token é invalidado quando o administrador altera
+o papel, desativa a conta ou redefine a senha. Contas com troca de senha pendente só
+acessam `/auth/me` e `/auth/change-password`.
+
+**Permissões.** Papéis hierárquicos verificados no servidor em cada endpoint:
+`campo` < `gestor` < `orgao` < `admin`. Operações administrativas ficam sob
+`/api/v1/admin` e exigem `admin`.
+
+**Paginação.** Listagens aceitam `page` (a partir de 1) e `size` (máximo 100) e
+devolvem `items`, `total`, `page`, `size` e `pages`.
+
+**Datas.** Instantes em UTC (ISO 8601). A interface converte para o fuso de Fortaleza.
+
+**Erros.** `401` sem autenticação ou sessão revogada; `403` papel insuficiente;
+`404` recurso inexistente; `409` conflito de versão ou regra de proteção;
+`422` dados inválidos; `429` limite de requisições.
+"""
+
+OPENAPI_TAGS = [
+    {"name": "autenticação", "description": "Login, sessão atual e troca da própria senha."},
+    {
+        "name": "administração: painel",
+        "description": "Cockpit: estado, fontes, execuções, "
+        "permissões, configuração e especificação da API. Somente administrador.",
+    },
+    {
+        "name": "administração: usuários",
+        "description": "Gestão de contas com confirmação, "
+        "motivo, controle de concorrência e auditoria. Somente administrador.",
+    },
+    {"name": "administração: auditoria", "description": "Trilha de auditoria e exportação CSV."},
+    {
+        "name": "focos de calor",
+        "description": "Focos de calor por satélite (INPE, NASA FIRMS), "
+        "agregados por município e estado das fontes.",
+    },
+    {"name": "jurisdições (IBGE)", "description": "Malha municipal oficial do IBGE."},
+    {"name": "denúncias", "description": "Denúncias do portal público e triagem."},
+    {"name": "incidentes", "description": "Ocorrências ambientais e seu ciclo de vida."},
+    {"name": "missões", "description": "Missões de campo vinculadas a incidentes."},
+    {"name": "equipes", "description": "Equipes de campo."},
+    {"name": "recursos", "description": "Recursos operacionais."},
+    {"name": "evidências", "description": "Evidências anexadas a incidentes."},
+    {"name": "áreas protegidas", "description": "Áreas protegidas cadastradas."},
+    {"name": "sala de crise", "description": "Visão consolidada para a sala de crise."},
+    {"name": "meteorologia", "description": "Condições meteorológicas (Open-Meteo)."},
+    {"name": "geocodificação", "description": "Geocodificação (OpenStreetMap Nominatim)."},
+    {"name": "relatórios ESG", "description": "Experimental: fora da navegação operacional."},
+    {
+        "name": "assistente (experimental)",
+        "description": "Experimental: fora da navegação operacional.",
+    },
+    {"name": "saúde do serviço", "description": "Liveness e readiness para a plataforma."},
+]
+
+
 def create_app() -> FastAPI:
+    # In staging/production the public spec and its UIs are not mounted at all
+    # (404): administrators read it through /api/v1/admin/openapi.json.
+    public_docs = settings.docs_public
     app = FastAPI(
         title="IGNIS Orbital API",
-        description=(
-            "API REST para monitoramento ambiental, proteção de áreas naturais e "
-            "gestão de incidentes ambientais. "
-            "Projeto acadêmico FIAP — Global Solution 2026.\n\n"
-            "**Autores:** Elias Sales de Freitas (RM561257) · João Vitor Bernardo (RM566427)"
-        ),
+        summary="Monitoramento de focos de calor e gestão de ocorrências ambientais.",
+        description=DESCRIPTION,
         version=settings.app_version,
+        contact={"name": "Andrade Systems", "url": "https://github.com/eliasandraade"},
+        openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if public_docs else None,
+        redoc_url="/redoc" if public_docs else None,
+        openapi_url="/openapi.json" if public_docs else None,
     )
 
     app.add_middleware(
@@ -69,7 +132,9 @@ def create_app() -> FastAPI:
     app.include_router(resources_router)
     app.include_router(missions_router)
     app.include_router(evidence_router)
-    app.include_router(aurora_router)
+    # Assistente experimental: fora do produto operacional (404 em staging/produção).
+    if settings.aurora_enabled:
+        app.include_router(aurora_router)
     app.include_router(esg_router)
     app.include_router(audit_router)
     app.include_router(admin_stats_router)
@@ -81,7 +146,22 @@ def create_app() -> FastAPI:
     app.include_router(jurisdictions_router)
     app.include_router(geocoding_router)
 
+    _summaries_from_docstrings(app)
     return app
+
+
+def _summaries_from_docstrings(app: FastAPI) -> None:
+    """OpenAPI summary = first sentence of the route docstring (pt-BR), instead
+    of the function name FastAPI would title-case ("Get Stats")."""
+    from app.core.permissions import _api_routes
+
+    for route in _api_routes(app.routes):
+        if route.summary or not route.description:
+            continue
+        paragraph = " ".join(route.description.strip().split("\n\n")[0].split())
+        sentence = re.split(r"(?<=[.;])\s", paragraph, maxsplit=1)[0].rstrip(".;")
+        if sentence:
+            route.summary = sentence if len(sentence) <= 100 else sentence[:97].rstrip() + "…"
 
 
 app = create_app()

@@ -333,6 +333,12 @@ RETURNING id
     ).all()
     report.not_in_dataset = sorted(set(stored) - known)
 
+    # The migrate role re-runs this on every deploy: audit only an import that
+    # created the dataset or changed rows, never an unchanged confirmation.
+    if not (report.dataset_created or report.inserted or report.updated):
+        await session.flush()
+        return report
+
     from app.core.audit import log_action
 
     await log_action(

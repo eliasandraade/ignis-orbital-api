@@ -11,7 +11,7 @@ from app.dependencies import require_role
 from app.esg import service as esg_service
 from app.esg.schemas import ESGReportCreate, ESGReportRead
 
-router = APIRouter(prefix="/api/v1/esg", tags=["esg"])
+router = APIRouter(prefix="/api/v1/esg", tags=["relatórios ESG"])
 
 
 @router.get("", response_model=Page[ESGReportRead])

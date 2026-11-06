@@ -66,3 +66,5 @@ logs/
 deploy/local/.validation.env
 deploy/local/.validation-db-secret
 deploy/local/.last-ingest.json
+# Staging (Railway) homologation credentials: generated locally, never committed
+deploy/local/.staging.env

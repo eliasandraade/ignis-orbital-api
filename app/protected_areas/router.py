@@ -12,7 +12,7 @@ from app.dependencies import require_role
 from app.protected_areas import service as area_service
 from app.protected_areas.schemas import ProtectedAreaCreate, ProtectedAreaRead, ProtectedAreaUpdate
 
-router = APIRouter(prefix="/api/v1/protected-areas", tags=["protected-areas"])
+router = APIRouter(prefix="/api/v1/protected-areas", tags=["áreas protegidas"])
 
 
 @router.get("", response_model=Page[ProtectedAreaRead])

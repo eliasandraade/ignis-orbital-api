@@ -93,6 +93,9 @@ class Settings(BaseSettings):
         # .env is shared with docker compose (POSTGRES_*), so unrelated keys
         # must not abort startup. Unknown keys are ignored, never applied.
         extra="ignore",
+        # A validation error must never echo the configuration it rejected: the
+        # input holds DATABASE_URL and JWT_SECRET_KEY and ends up in deploy logs.
+        hide_input_in_errors=True,
     )
 
     app_name: str = "IGNIS Orbital API"
@@ -116,6 +119,22 @@ class Settings(BaseSettings):
     # HMAC family only: an env value such as "none" must never be accepted.
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_expire_minutes: int = Field(default=480, ge=5, le=1440)
+
+    # Public /docs, /redoc and /openapi.json. Unset ("auto"): public only outside
+    # staging/production. Operational environments cannot turn them on: there
+    # the spec is served to administrators at /api/v1/admin/openapi.json.
+    api_docs_public: bool | None = None
+
+    # Experimental rule-based assistant ("Aurora", /api/v1/aurora/*). Not part of
+    # the operational product: unset ("auto") mounts it only outside
+    # staging/production, and operational environments cannot turn it on.
+    aurora_experimental: bool | None = None
+
+    # Public reports ("denúncias") carry citizens' personal data. Unset ("auto"):
+    # accepted only outside staging/production. Operational environments start
+    # closed until the owner records the LGPD analysis (international transfer:
+    # Railway has no Brazilian region) and opens them explicitly.
+    public_reports_enabled: bool | None = None
 
     # A source whose last successful ingestion is older than this is "stale".
     # Three cron intervals (15 min) plus margin for the providers' own latency.
@@ -189,6 +208,24 @@ class Settings(BaseSettings):
     @property
     def is_operational(self) -> bool:
         return self.app_env in OPERATIONAL_ENVS
+
+    @property
+    def docs_public(self) -> bool:
+        if self.api_docs_public is None:
+            return not self.is_operational
+        return self.api_docs_public and not self.is_operational
+
+    @property
+    def aurora_enabled(self) -> bool:
+        if self.aurora_experimental is None:
+            return not self.is_operational
+        return self.aurora_experimental and not self.is_operational
+
+    @property
+    def public_reports_accepting(self) -> bool:
+        if self.public_reports_enabled is None:
+            return not self.is_operational
+        return self.public_reports_enabled
 
     @property
     def demo_seed_allowed(self) -> bool:

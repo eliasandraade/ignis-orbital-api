@@ -261,6 +261,7 @@ async def test_login_is_rate_limited(client):
         result = MagicMock()
         result.scalar_one_or_none.return_value = None
         session.execute.return_value = result
+        session.scalar = AsyncMock(return_value=None)
         yield session
 
     app.dependency_overrides[get_db] = _db
@@ -274,8 +275,7 @@ async def test_login_is_rate_limited(client):
 async def test_public_report_submission_is_rate_limited(client):
     # Invalid payloads still count: the limiter runs before validation-heavy work.
     statuses = [
-        (await client.post("/api/v1/reports", json={"type": "fire"})).status_code
-        for _ in range(11)
+        (await client.post("/api/v1/reports", json={"type": "fire"})).status_code for _ in range(11)
     ]
     assert statuses[-1] == 429
 
@@ -399,8 +399,13 @@ def test_railway_environment_mismatch_refuses_to_boot(railway_env, app_env):
 
 @pytest.mark.parametrize(
     ("railway_env", "app_env"),
-    [("staging", "staging"), ("production", "production"), ("Production", "production"),
-     ("ignis-pr-7", "staging"), ("", "production")],
+    [
+        ("staging", "staging"),
+        ("production", "production"),
+        ("Production", "production"),
+        ("ignis-pr-7", "staging"),
+        ("", "production"),
+    ],
 )
 def test_railway_environment_match_boots(railway_env, app_env):
     settings = Settings(
@@ -438,3 +443,21 @@ def test_client_ip_x_real_ip_ignored_unless_trusted(monkeypatch):
 def test_client_ip_header_is_a_closed_set():
     with pytest.raises(ValidationError):
         Settings(client_ip_header="x-client-ip", _env_file=None)
+
+
+def test_configuration_errors_never_echo_secrets():
+    """A rejected configuration ends up in deploy logs: no input values in the error."""
+    jwt = secrets.token_hex(32)
+    db_password = secrets.token_hex(16)
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            app_env="staging",
+            jwt_secret_key=jwt,
+            database_url=f"postgresql://ignis:{db_password}@ignis-postgis.railway.internal:5432/ignis",
+            cors_origins="https://",
+        )
+    text = str(exc.value)
+    assert "CORS_ORIGINS" in text
+    assert jwt not in text
+    assert db_password not in text
+    assert "input_value" not in text

@@ -25,6 +25,8 @@ def _user(role: str) -> MagicMock:
     user.role = role
     user.name = f"Usuário {role}"
     user.is_active = True
+    user.session_version = 0
+    user.must_change_password = False
     return user
 
 

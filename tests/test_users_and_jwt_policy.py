@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.security import create_access_token, decode_token
-from app.users.schemas import UserCreate, UserUpdate
+from app.users.schemas import AdminPasswordReset, AdminUserCreate, UserCreate
 from seed.seed_users import USERS
 
 # Published demo passwords come from the seed itself (no new literals): the
@@ -45,10 +45,22 @@ def test_user_create_accepts_strong_password():
     assert UserCreate(**VALID).role == "gestor"
 
 
-def test_user_update_password_policy_applies_only_when_set():
-    assert UserUpdate(name="Novo Nome").password is None
+GUARD = {"expected_version": 1, "confirm_password": "x", "reason": "rotina de teste"}
+
+
+def test_admin_password_reset_applies_the_policy():
+    assert AdminPasswordReset(**GUARD, temporary_password=VALID["password"]).reason
     with pytest.raises(ValidationError):
-        UserUpdate(password=DEMO_PW["admin"])
+        AdminPasswordReset(**GUARD, temporary_password=DEMO_PW["admin"])
+
+
+def test_admin_create_never_accepts_a_password_field_or_published_password():
+    body = {k: v for k, v in VALID.items() if k != "password"}
+    assert AdminUserCreate(**body, temporary_password=VALID["password"]).role == "gestor"
+    with pytest.raises(ValidationError):
+        AdminUserCreate(**VALID, temporary_password=VALID["password"])  # unknown "password"
+    with pytest.raises(ValidationError):
+        AdminUserCreate(**body, temporary_password=DEMO_PW["gestor"])
 
 
 async def test_admin_api_rejects_demo_password(client):
@@ -58,8 +70,9 @@ async def test_admin_api_rejects_demo_password(client):
 
     admin = type("U", (), {"id": uuid.uuid4(), "name": "a", "role": "admin", "is_active": True})()
     app.dependency_overrides[get_current_user] = lambda: admin
+    body = {k: v for k, v in VALID.items() if k != "password"}
     response = await client.post(
-        "/api/v1/admin/users", json={**VALID, "password": DEMO_PW["admin"]}
+        "/api/v1/admin/users", json={**body, "temporary_password": DEMO_PW["admin"]}
     )
     assert response.status_code == 422
 

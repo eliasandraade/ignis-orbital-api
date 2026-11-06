@@ -11,7 +11,7 @@ from app.dependencies import require_role
 from app.evidence import service as evidence_service
 from app.evidence.schemas import EvidenceCreate, EvidenceRead
 
-router = APIRouter(prefix="/api/v1/evidence", tags=["evidence"])
+router = APIRouter(prefix="/api/v1/evidence", tags=["evidências"])
 
 
 @router.get("", response_model=Page[EvidenceRead])

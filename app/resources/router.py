@@ -11,7 +11,7 @@ from app.dependencies import require_role
 from app.resources import service as resources_service
 from app.resources.schemas import ResourceCreate, ResourceRead, ResourceUpdate
 
-router = APIRouter(prefix="/api/v1/resources", tags=["resources"])
+router = APIRouter(prefix="/api/v1/resources", tags=["recursos"])
 
 
 @router.get("", response_model=Page[ResourceRead])

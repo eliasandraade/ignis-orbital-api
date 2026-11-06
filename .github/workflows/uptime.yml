@@ -1,0 +1,64 @@
+name: Monitor de disponibilidade
+
+# Checks the public addresses from outside Railway and keeps one open issue while
+# something is down, which notifies the repository owner. GitHub only runs
+# schedules from the default branch, and the schedule can be delayed: this detects
+# an outage in about 15 to 30 minutes, it is not a real-time pager.
+#
+# Production stays out until the first deploy. Then set the repository variables
+# UPTIME_PRODUCTION=true and, if ingestion is enabled there, UPTIME_PRODUCTION_INGEST=true.
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: "Indisponibilidade detectada pelo monitor"
+
+jobs:
+  check:
+    name: Verificar endereços
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Staging (saúde e ingestão INPE)
+        id: staging
+        continue-on-error: true
+        run: bash .github/scripts/uptime_check.sh https://ignis-web-staging.up.railway.app true
+      - name: Produção
+        id: production
+        if: vars.UPTIME_PRODUCTION == 'true'
+        continue-on-error: true
+        env:
+          CHECK_INGEST: ${{ vars.UPTIME_PRODUCTION_INGEST == 'true' }}
+        run: bash .github/scripts/uptime_check.sh https://ignis.andradesystems.com.br "$CHECK_INGEST"
+      - name: Abrir ou encerrar a issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING: ${{ steps.staging.outcome }}
+          PRODUCTION: ${{ steps.production.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          open_issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$ISSUE_TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          if [ "$STAGING" = "failure" ] || [ "$PRODUCTION" = "failure" ]; then
+            body="Staging: $STAGING. Produção: ${PRODUCTION:-não monitorada}. Execução: $RUN_URL"
+            if [ -n "$open_issue" ]; then
+              gh issue comment "$open_issue" --repo "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$body"
+            fi
+            exit 1
+          fi
+          if [ -n "$open_issue" ]; then
+            gh issue close "$open_issue" --repo "$GITHUB_REPOSITORY" --comment "Endereços monitorados voltaram a responder. Execução: $RUN_URL"
+          fi

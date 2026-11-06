@@ -61,14 +61,14 @@ def fresh_database():
 def test_migration_upgrade_downgrade_upgrade(fresh_database):
     postgis.alembic("upgrade", postgis.BASELINE_REVISION, database=fresh_database)
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a015 (head)" in postgis.alembic("current", database=fresh_database)
     postgis.alembic("downgrade", postgis.BASELINE_REVISION, database=fresh_database)
     out = postgis.run_module(
         "seed.jurisdictions", database=fresh_database
     )  # tables are gone: the importer must fail, not create them
     assert out.returncode != 0
     postgis.alembic("upgrade", "head", database=fresh_database)
-    assert "a014 (head)" in postgis.alembic("current", database=fresh_database)
+    assert "a015 (head)" in postgis.alembic("current", database=fresh_database)
 
 
 async def test_schema_matches_the_models(geo_engine):
@@ -243,12 +243,22 @@ async def test_reimport_is_idempotent_and_restores_drift(geo_engine):
             text("UPDATE jurisdictions SET name = 'Nome adulterado' WHERE ibge_code = '2304400'")
         )
 
+    audit_count = text("SELECT count(*) FROM audit_logs WHERE action = 'jurisdictions.imported'")
+    async with geo_engine.connect() as conn:
+        audits_before = await conn.scalar(audit_count)
     async with AsyncSession(geo_engine) as session:
         repaired = await import_state(session)
         await session.commit()
+    async with geo_engine.connect() as conn:
+        audits_repaired = await conn.scalar(audit_count)
     async with AsyncSession(geo_engine) as session:
         again = await import_state(session)
         await session.commit()
+    async with geo_engine.connect() as conn:
+        audits_again = await conn.scalar(audit_count)
+    # A repair is audited; an unchanged confirmation (every deploy) is not.
+    assert audits_repaired == audits_before + 1
+    assert audits_again == audits_repaired
 
     assert (repaired.inserted, repaired.updated, repaired.unchanged) == (0, 1, 184)
     assert (again.inserted, again.updated, again.unchanged) == (0, 0, 185)

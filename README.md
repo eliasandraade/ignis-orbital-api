@@ -1,13 +1,7 @@
 # IGNIS Orbital API
 
-**Backend REST para monitoramento ambiental e proteção de áreas naturais.**
-
-Projeto acadêmico desenvolvido para a disciplina **Global Solution 2026** — FIAP.
-
-| Autor | RM |
-|---|---|
-| Elias Sales de Freitas | RM561257 |
-| João Vitor Bernardo | RM566427 |
+**IGNIS Orbital by Andrade Systems** — backend da plataforma de monitoramento de focos de
+calor por satélite e de apoio à gestão de ocorrências ambientais.
 
 ---
 
@@ -171,7 +165,7 @@ pytest tests/test_health.py -v
 python -m seed
 ```
 
-> **Nota:** Os dados gerados pelo seed são exclusivamente demonstrativos para fins acadêmicos.
+> **Nota:** Os dados gerados pelo seed são exclusivamente demonstrativos (desenvolvimento local; o seed é recusado em staging e produção).
 > Os campos `source = "base demonstrativa acadêmica"` e `data_quality = "estimated"` indicam
 > que não representam dados oficiais de nenhum órgão ambiental.
 
@@ -276,5 +270,6 @@ Hospedagem exclusiva no **Railway** (staging + production), declarada em `.railw
 
 ## Licença
 
-Projeto acadêmico — FIAP Global Solution 2026.
-Uso educacional. Dados demonstrativos não representam informações oficiais.
+© Andrade Systems. Os termos de licenciamento são definidos pelo proprietário; este repositório
+não declara uma licença de código aberto. Dados demonstrativos do seed não representam informações
+oficiais.

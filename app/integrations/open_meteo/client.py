@@ -7,11 +7,7 @@ from app.config import get_settings
 settings = get_settings()
 
 _CURRENT_VARIABLES = (
-    "temperature_2m,"
-    "relative_humidity_2m,"
-    "wind_speed_10m,"
-    "wind_direction_10m,"
-    "precipitation"
+    "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation"
 )
 
 
@@ -30,7 +26,9 @@ async def fetch_current_weather(lat: float, lng: float) -> dict:
     }
     async with httpx.AsyncClient(
         timeout=settings.external_api_timeout_seconds,
-        headers={"User-Agent": "IGNIS-Orbital/1.0 (FIAP GS 2026; academic project)"},
+        headers={
+            "User-Agent": "IGNIS-Orbital/1.0 (Andrade Systems; +https://github.com/eliasandraade/ignis-orbital-api)"
+        },
     ) as client:
         response = await client.get(url, params=params)
         response.raise_for_status()
