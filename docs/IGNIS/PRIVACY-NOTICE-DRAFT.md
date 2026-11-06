@@ -7,14 +7,14 @@
 | Campo | Quem define |
 |---|---|
 | Controlador: razão social, CNPJ e endereço | Proprietário |
-| Canal do titular e encarregado (DPO) | Proprietário |
+| Encarregado (DPO) | Proprietário |
 | Bases legais por finalidade | Proprietário, com orientação jurídica |
 | Prazos de retenção de contas e auditoria | Proprietário (hoje não há expurgo automático definido) |
 | Transferência internacional (decisão D-1) | Proprietário |
 
 ## Texto proposto
 
-**Quem somos.** O IGNIS Orbital é operado por [controlador], [CNPJ], [endereço].
+**Quem somos.** O IGNIS Orbital é operado por [controlador], [CNPJ], [endereço]. Canal de contato e privacidade: contato@andradesystems.com.br.
 
 **Mapa público.** O mapa público não exige conta. Os focos de calor exibidos vêm de fontes públicas (INPE) e não são dados pessoais.
 
@@ -36,7 +36,7 @@
 
 **Retenção.** [Prazos.]
 
-**Direitos do titular.** Você pode solicitar confirmação, acesso, correção e eliminação pelo canal [canal], nos termos da LGPD.
+**Direitos do titular.** Você pode solicitar confirmação, acesso, correção e eliminação pelo e-mail contato@andradesystems.com.br, nos termos da LGPD.
 
 **Atualização.** Versão de [data].
 

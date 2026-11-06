@@ -281,7 +281,7 @@ Encontrados na revisão de 05/11/2026:
 |---|---|---|
 | B9 | **Vercel:** os dois projetos seguem ligados e servem a entrega acadêmica, que chama uma API desativada | O `vercel.json` da pilha desliga deploys por Git no merge. Desconectar é decisão do proprietário; a conta Vercel desta sessão não enxerga esses projetos |
 | B10 | ~~**Web:** `promote.yml` não podia ser disparado~~ | **Resolvido em 05/11/2026:** gatilho por tag `promote/*`, sem trocar o branch padrão |
-| B11 | **Sem aviso de privacidade** publicado | PR web #9 pronto e travado; faltam 7 campos jurídicos ([PRIVACY-DATA-MAP.md](PRIVACY-DATA-MAP.md) §6) |
+| B11 | **Sem aviso de privacidade** publicado | PR web #9 pronto e travado; faltam 6 campos jurídicos ([PRIVACY-DATA-MAP.md](PRIVACY-DATA-MAP.md) §6) |
 | B12 | ~~**Restauração não testada**~~ | **`pg_dump` testado em 05/11/2026** (abaixo). Restauração nativa de volume segue sem teste |
 | B13 | **SonarCloud do web:** o PR web #8 não tem check de Quality Gate, e o projeto não é encontrado na API pública (pode ser privado). O job "SonarQube Cloud (cobertura)" é pulado | Criar o projeto ou decidir seguir sem ele |
 

@@ -66,11 +66,12 @@ Nenhum mecanismo foi escolhido, e o aviso não afirma nenhum.
 Definidos em `ignis-fire-watch/src/content/privacyNotice.ts`:
 
 1. Controlador: identificação e papéis confirmados.
-2. Canal para o titular.
-3. Encarregado (DPO).
-4. Hipóteses legais por finalidade.
-5. Prazos de retenção.
-6. Mecanismo de transferência internacional.
-7. Data de vigência.
+2. Encarregado (DPO).
+3. Hipóteses legais por finalidade.
+4. Prazos de retenção.
+5. Mecanismo de transferência internacional.
+6. Data de vigência.
+
+**Definido pelo proprietário em 06/11/2026:** o canal institucional de contato e privacidade é `contato@andradesystems.com.br`, também usado para o exercício dos direitos do titular. Esse canal **não** é a indicação formal de um encarregado.
 
 Depois de preenchê-los, é preciso marcar `PRIVACY_NOTICE_APPROVED = true`. Antes disso, o build de produção não exibe a página.

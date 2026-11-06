@@ -24,7 +24,7 @@ Atualizado em 06/11/2026, com as decisões do proprietário sobre a versão inic
 | P7 | Autorização de merge e promoção | **Pendente** | — |
 | P8 | Restauração em banco descartável | **Feito** com `pg_dump`. Restauração nativa de volume não testada | HOMOLOGATION-CHECKLIST H-22 |
 | P9 | SonarCloud do web | **Pendente: exige login do proprietário.** Não bloqueia os checks atuais | Passos abaixo |
-| P10 | Aviso de privacidade | **Pendente: 7 campos jurídicos** (PRIVACY-DATA-MAP §6). PR web #9 pronto e travado | PR web #9 |
+| P10 | Aviso de privacidade | **Pendente: 6 campos jurídicos** (PRIVACY-DATA-MAP §6). PR web #9 pronto e travado | PR web #9 |
 | P11 | Alertas do Railway | **Pendente: exige o painel.** A API do Railway recusou a regra por canal não documentado, e nenhuma regra foi criada. O `uptime.yml` entra com o merge | Passos abaixo |
 
 **P9, SonarCloud do web:**
