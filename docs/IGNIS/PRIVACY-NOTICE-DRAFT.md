@@ -1,6 +1,6 @@
 # IGNIS Orbital: rascunho do aviso de privacidade
 
-**Rascunho para aprovação do proprietário. Não está publicado e não é parecer jurídico.** Os fatos abaixo foram conferidos no código e na infraestrutura em 05/11/2026. Os campos entre colchetes dependem do proprietário.
+**Rascunho para aprovação do proprietário. Não está publicado e não é parecer jurídico.** O texto de trabalho agora está em `ignis-fire-watch/src/content/privacyNotice.ts` (PR web #9), e os fatos e os papéis, em [PRIVACY-DATA-MAP.md](PRIVACY-DATA-MAP.md). Corrigido em 06/11/2026: não há cookie em uso, e o Google Fonts também recebe o IP do visitante. Os campos entre colchetes dependem do proprietário.
 
 ## Lacunas a preencher antes de publicar
 
@@ -22,13 +22,13 @@
 
 **Registros de auditoria.** Ações administrativas ficam registradas com o nome de quem agiu, a ação, o item afetado e detalhes técnicos, para segurança e rastreabilidade.
 
-**Endereço IP.** O IP é usado para limitar tentativas de acesso. O provedor de hospedagem também pode registrá-lo em logs técnicos.
+**Endereço IP.** O IP é usado para limitar tentativas de acesso e aparece nos registros técnicos da aplicação, guardados por até 30 dias no provedor de hospedagem.
 
-**Armazenamento no navegador.** Depois do login, o navegador guarda o token de sessão e os dados básicos do usuário. Um cookie guarda a preferência de exibição da barra lateral. Não usamos cookies de publicidade.
+**Armazenamento no navegador.** Depois do login, o navegador guarda o token de sessão e os dados básicos do usuário. A plataforma não usa cookies.
 
 **Terceiros.**
 - Railway hospeda a aplicação e o banco de dados, na região Leste dos Estados Unidos. [Texto sobre transferência internacional, conforme D-1.]
-- OpenStreetMap fornece as imagens do mapa. O navegador as solicita diretamente, e o serviço recebe o endereço IP do visitante.
+- OpenStreetMap fornece as imagens do mapa e Google Fonts, as fontes do site. O navegador as solicita diretamente, e esses serviços recebem o endereço IP do visitante.
 
 **Denúncias.** O recebimento de denúncias está desativado. Em caso de incêndio, acione o Corpo de Bombeiros (193) ou a Defesa Civil (199).
 
@@ -42,4 +42,4 @@
 
 ## Depois de aprovar
 
-Publicar como página estática `/privacidade`, com link no rodapé e na tela de login, em um PR próprio do `ignis-fire-watch`. O texto deve ser revisto antes de abrir as denúncias, pois elas tratam dados pessoais que este rascunho não cobre.
+Preencher os campos e marcar a aprovação no PR web #9, que já traz a página `/privacidade` e os links. O texto deve ser revisto antes de abrir as denúncias, pois elas tratam dados pessoais que este rascunho não cobre.

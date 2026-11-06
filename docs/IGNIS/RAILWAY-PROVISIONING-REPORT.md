@@ -270,7 +270,7 @@ Não use o mecanismo de variável temporária do §7 em produção.
 | B2 | ~~**DNS** na GoDaddy~~ | **Resolvido em 04/11/2026:** registros propagados e certificado emitido (§10) |
 | B3 | ~~**GitGuardian**~~ | **Classificado pelo proprietário em 05/11/2026.** Check verde nos HEADs novos dos PRs do topo |
 | B4 | **Primeiro admin de produção** | §12 (exige SSH com chave própria; esta missão não registrou chave na conta) |
-| B5 | **D-1 LGPD** | Não bloqueia o portal somente leitura; bloqueia abrir as denúncias (`PUBLIC_REPORTS_ENABLED`) |
+| B5 | **D-1 LGPD** | Avaliação de transferência internacional pendente (PRIVACY-DATA-MAP §4). Denúncias seguem fechadas |
 | B6 | ~~Governança no GitHub~~ | **Resolvido em 05/11/2026** (RAILWAY-DEPLOYMENT §6) |
 | B7 | ~~Selar variáveis~~ | **Resolvido em 05/11/2026:** `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` selados nos dois ambientes, sem deploy em produção |
 | B8 | Alertas | Monitor externo pronto (`uptime.yml`), ativo depois do merge. Falta o proprietário ligar as notificações do Railway |
@@ -281,7 +281,7 @@ Encontrados na revisão de 05/11/2026:
 |---|---|---|
 | B9 | **Vercel:** os dois projetos seguem ligados e servem a entrega acadêmica, que chama uma API desativada | O `vercel.json` da pilha desliga deploys por Git no merge. Desconectar é decisão do proprietário; a conta Vercel desta sessão não enxerga esses projetos |
 | B10 | ~~**Web:** `promote.yml` não podia ser disparado~~ | **Resolvido em 05/11/2026:** gatilho por tag `promote/*`, sem trocar o branch padrão |
-| B11 | **Sem aviso de privacidade** publicado | Rascunho em [PRIVACY-NOTICE-DRAFT.md](PRIVACY-NOTICE-DRAFT.md), aguardando os dados do proprietário |
+| B11 | **Sem aviso de privacidade** publicado | PR web #9 pronto e travado; faltam 7 campos jurídicos ([PRIVACY-DATA-MAP.md](PRIVACY-DATA-MAP.md) §6) |
 | B12 | ~~**Restauração não testada**~~ | **`pg_dump` testado em 05/11/2026** (abaixo). Restauração nativa de volume segue sem teste |
 | B13 | **SonarCloud do web:** o PR web #8 não tem check de Quality Gate, e o projeto não é encontrado na API pública (pode ser privado). O job "SonarQube Cloud (cobertura)" é pulado | Criar o projeto ou decidir seguir sem ele |
 
