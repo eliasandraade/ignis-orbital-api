@@ -197,7 +197,7 @@ for (const env of ["staging", "production"] as const) {
       assert.equal(job.networking, undefined);
       preserved(job, "JWT_SECRET_KEY");
       assert.equal(literal(job, "INPE_QUEIMADAS_ENABLED"), "true");
-      assert.equal(literal(job, "NASA_FIRMS_MAP_KEY"), undefined, "NASA FIRMS stays disabled");
+      assert.equal(job.variables?.NASA_FIRMS_MAP_KEY, undefined, "NASA FIRMS stays disabled");
     }
     assert.equal(INGEST_CRON, "*/15 * * * *");
   });
