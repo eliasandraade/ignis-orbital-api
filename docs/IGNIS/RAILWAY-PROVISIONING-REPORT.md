@@ -228,7 +228,7 @@ O token de verificação é público por natureza, porque é publicado no DNS. E
 
 Só depois do primeiro deploy de produção (§14, B1):
 
-1. Registre uma chave SSH própria do IGNIS na conta Railway:
+1. Registre uma chave SSH própria do IGNIS na conta Railway, **com passphrase** (a chave do teste de restauração já foi removida):
    ```bash
    ssh-keygen -t ed25519 -f ~/.ssh/ignis-railway
    ```
@@ -268,27 +268,36 @@ Não use o mecanismo de variável temporária do §7 em produção.
 |---|---|---|
 | B1 | **Código fora dos branches de implantação.** A produção só implanta do branch `production`, que o `promote.yml` cria a partir de um commit de `main`/`master` com CI verde. A pilha de PRs (api #3→#5→#6→#7→#8→#9; web #4→#6→#7→#8) não está mergeada | Aprovar e mergear a pilha; depois rodar `promote.yml` nos dois repositórios |
 | B2 | ~~**DNS** na GoDaddy~~ | **Resolvido em 04/11/2026:** registros propagados e certificado emitido (§10) |
-| B3 | **GitGuardian**: incidentes `39592651` (api) e `39592652` (web) mantêm o check vermelho nos PRs | Classificar no painel como *test credential / false positive* (evidência em ADMIN-SECURITY-REVIEW §11); os anteriores 33462092 e 39541748–39541751 seguem pendentes |
+| B3 | ~~**GitGuardian**~~ | **Classificado pelo proprietário em 05/11/2026.** Check verde nos HEADs novos dos PRs do topo |
 | B4 | **Primeiro admin de produção** | §12 (exige SSH com chave própria; esta missão não registrou chave na conta) |
 | B5 | **D-1 LGPD** | Não bloqueia o portal somente leitura; bloqueia abrir as denúncias (`PUBLIC_REPORTS_ENABLED`) |
-| B6 | Governança no GitHub | Environment `production` com revisores e rulesets em `production`/`main`/`master`/`staging` (RAILWAY-DEPLOYMENT §6) |
-| B7 | Selar variáveis | Railway → *Variables* → *Seal* em `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` (os dois ambientes) |
-| B8 | Alertas | Configurar notificações de deploy/healthcheck no Railway e um monitor externo de `/healthz` |
+| B6 | ~~Governança no GitHub~~ | **Resolvido em 05/11/2026** (RAILWAY-DEPLOYMENT §6) |
+| B7 | ~~Selar variáveis~~ | **Resolvido em 05/11/2026:** `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` selados nos dois ambientes, sem deploy em produção |
+| B8 | Alertas | Monitor externo pronto (`uptime.yml`), ativo depois do merge. Falta o proprietário ligar as notificações do Railway |
 
 Encontrados na revisão de 05/11/2026:
 
 | # | Bloqueio | Ação necessária |
 |---|---|---|
-| B9 | **Vercel:** o `vercel.json` que desliga os deploys só entra com o web #6, e o #4 mantém o antigo. O vínculo dos projetos não pôde ser confirmado por esta sessão | Desconectar o repositório **antes** do merge; o runbook usa merge único do topo da pilha |
-| B10 | **Web:** branch padrão é `main`, de histórico sem relação com `master`; o `promote.yml` não pode ser disparado | Tag de arquivamento e troca do padrão para `master` |
-| B11 | **Sem aviso de privacidade** no frontend (nenhuma ocorrência de "privacidade" ou "LGPD" em `src`) | Decisão do proprietário, junto com D-1, antes de divulgar o endereço |
-| B12 | **Restauração de backup não testada (H-22).** Agendamentos ativos nos dois ambientes (diário 6 d, semanal 27 d, mensal 89 d), mas com só 1 backup diário em cada volume até 05/11/2026 | Autorizar o teste: `pg_dump` com chave SSH própria do IGNIS, restaurando num banco descartável, ou restauração do volume de staging |
+| B9 | **Vercel:** os dois projetos seguem ligados e servem a entrega acadêmica, que chama uma API desativada | O `vercel.json` da pilha desliga deploys por Git no merge. Desconectar é decisão do proprietário; a conta Vercel desta sessão não enxerga esses projetos |
+| B10 | ~~**Web:** `promote.yml` não podia ser disparado~~ | **Resolvido em 05/11/2026:** gatilho por tag `promote/*`, sem trocar o branch padrão |
+| B11 | **Sem aviso de privacidade** publicado | Rascunho em [PRIVACY-NOTICE-DRAFT.md](PRIVACY-NOTICE-DRAFT.md), aguardando os dados do proprietário |
+| B12 | ~~**Restauração não testada**~~ | **`pg_dump` testado em 05/11/2026** (abaixo). Restauração nativa de volume segue sem teste |
 | B13 | **SonarCloud do web:** o PR web #8 não tem check de Quality Gate, e o projeto não é encontrado na API pública (pode ser privado). O job "SonarQube Cloud (cobertura)" é pulado | Criar o projeto ou decidir seguir sem ele |
 
 **Medições de 05/11/2026, por volta de 16:40 UTC:**
 - Cron de staging: 86 rodadas desde 04/11 19:16 UTC, intervalo de 12,7 a 17,5 min, todas com `exit_code=0`; INPE `ok` em todas; FIRMS `disabled` por falta de chave.
 - Produção: sem `ignis-ingest`, sem deploy de `ignis-api` e `ignis-web`; `DATABASE_URL`, `JWT_SECRET_KEY` e `POSTGRES_PASSWORD` diferem dos de staging (comparação por hash).
 - Staging e produção: `PUBLIC_REPORTS_ENABLED=false`, `ORBITAL_ALERTS_DEMO_MODE=false`, `SKIP_DEMO_SEED=true`. `POST /api/v1/reports` responde 503 em staging.
+
+**Teste de restauração de 05/11/2026 (00:29 UTC de 06/11, staging):**
+- Método: `pg_dump -Fc` por SSH, com chave criada só para o teste e removida depois, restaurado com `pg_restore --exit-on-error --single-transaction` em container local descartável (`postgis/postgis:16-3.4`, PostgreSQL 16.4, igual à origem, sem volume). O volume de staging não foi tocado, e o dump local foi apagado.
+- Integridade: 17 tabelas, com contagem e hash de todas as linhas idênticos entre origem e restauração, além de migração `a015`, PostGIS 3.4.3, 70 constraints e 68 índices. A origem não mudou durante o dump.
+- Contagens: `orbital_detections` 875, `ingestion_runs` 610, `jurisdictions` 185, `audit_logs` 50, `users` 5.
+- Funcional: a API da árvore atual subiu contra o banco restaurado. `alembic current` = `a015 (head)`, `/ready` 200, estatísticas com 875 focos, denúncias fechadas e rota administrativa anônima 401.
+- Limite: prova a recuperação lógica, não o fluxo *Restore* de volume do Railway, que substitui o volume existente.
+
+**Segredos em 05/11/2026:** selados nos dois ambientes. Antes da selagem, os hashes de `DATABASE_URL`, `JWT_SECRET_KEY` e `POSTGRES_PASSWORD` diferiam entre staging e produção. Em staging, depois do redeploy, os hashes dentro do container não mudaram, a API seguiu `/ready` 200 e o cron concluiu com `exit_code=0`. `config plan` não mostra mudança de variável nos dois ambientes; mostra só `restartPolicyType` (`null` → `ON_FAILURE`) em `ignis-api` e `ignis-web`, não aplicado. Sem PR deploys, sem tokens de projeto. O acesso SSH ao container continua expondo as variáveis a quem tem a conta.
 
 Sequência exata: [PRODUCTION-PROMOTION-RUNBOOK.md](PRODUCTION-PROMOTION-RUNBOOK.md).
 

@@ -96,7 +96,7 @@ Nomes, valores e tipos: ver [RAILWAY-PROVISIONING-REPORT.md §8](RAILWAY-PROVISI
   python -c "import secrets,sys;sys.stdout.write(secrets.token_hex(32))" | railway variable set NOME --stdin --service <svc> --environment <amb> --skip-deploys
   ```
   Nunca colocar o valor em argumento, chat, log ou arquivo versionado.
-- Selar no painel (*Seal*) depois de gravar (pendência B7).
+- Selar depois de gravar. `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` já estão selados nos dois ambientes. Selagem é permanente: o valor só pode ser substituído.
 - Variáveis fora do IaC são **removidas** pelo próximo `config apply` (o plano mostra `Delete variable …`). Uma variável temporária deve sair pelo próprio apply, com `--confirm-destructive`.
 - Rotação:
   - trocar `JWT_SECRET_KEY` invalida todas as sessões;
@@ -120,7 +120,7 @@ Nomes, valores e tipos: ver [RAILWAY-PROVISIONING-REPORT.md §8](RAILWAY-PROVISI
 | `watchPatterns` (api) | `railway.ts` | Mudança só em documentação não redeploya |
 
 **O workflow `promote.yml`** é a única forma prevista de mover `production`:
-- disparo manual, com aprovação do environment `production` do GitHub;
+- disparo manual, com aprovação do environment `production` do GitHub. Na API, por `workflow_dispatch`; no web, por tag `promote/*`, pois o branch padrão de lá é `main`;
 - só aceita commit que já está em `main`/`master` e que tem **CI de push bem-sucedida**;
 - faz **somente fast-forward** e push **sem `--force`**. O commit promovido é exatamente o que rodou em staging.
 
@@ -136,22 +136,27 @@ A lógica foi testada num repositório descartável, com estes resultados:
 
 Observação: o push feito pelo `GITHUB_TOKEN` não dispara uma nova execução da CI. O Railway usa as *check suites* já concluídas daquele mesmo commit em `main`. Validar esse comportamento na homologação (H-15).
 
-## 6. Configuração no GitHub (proprietário)
+## 6. Configuração no GitHub (aplicada em 05/11/2026)
 
-1. **Environment `production`** nos dois repositórios (*Settings → Environments*):
-   - *Required reviewers* = proprietário;
-   - *Deployment branches* = somente o branch padrão.
-2. **Ruleset** no branch `production` dos dois repositórios:
-   - bloquear *force push* e exclusão;
-   - restringir atualizações, com bypass apenas para *GitHub Actions* e o proprietário;
-   - exigir os checks da CI.
-3. **Ruleset** em `main` (backend) e `master` (frontend): exigir PR e os checks da CI.
-4. **Ruleset** no branch `staging` dos dois repositórios: bloquear *force push* e exclusão (só fast-forward por quem homologa).
-5. **Frontend:** executar a estratégia de branches (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`): tag de arquivamento de `main`, e `master` como branch padrão. Nenhum force-push, nenhum histórico perdido.
-6. **Vercel (transitório):** o projeto Vercel antigo ainda está ligado ao repositório do frontend.
-   - O `vercel.json` foi reduzido a `git.deploymentEnabled: false`, para que nenhum merge publique nada lá.
-   - O proprietário deve **desconectar o repositório do projeto Vercel**, ou excluir o projeto. Depois disso, o `vercel.json` pode ser removido.
+1. **Environment `production`** nos dois repositórios: *Required reviewers* = proprietário.
+   - Refs permitidas na API: branch `main`.
+   - Refs permitidas no web: branch `master` e tags `promote/*`.
+2. **Ruleset `production-somente-fast-forward`** nos dois repositórios: bloqueia force-push e exclusão e exige os checks da CI no commit. Não restringe atualizações, porque o GitHub não aceita o app *GitHub Actions* como exceção em repositório pessoal e isso bloquearia o `promote.yml`.
+3. **Ruleset `integracao`** em `main` (API) e `master` (web): exige PR, merge commit e os checks da CI e do GitGuardian. Na API, também o SonarCloud.
+4. **Ruleset `staging-fast-forward`** nos dois repositórios: bloqueia force-push e exclusão.
+5. **Somente no web:**
+   - ruleset `main-legado-congelado`, que impede alterar o snapshot de 2025;
+   - tag `archive/lovable-main-2025`;
+   - rulesets `tags-protegidas` e `tags-de-promocao`.
 
+   O branch padrão continua `main` (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`).
+6. **Vercel (transitório):** os dois projetos seguem ligados ao repositório do frontend e servem a entrega acadêmica.
+   - O `vercel.json` da pilha desliga novos deploys por Git quando chegar a `master`.
+   - Desconectar ou excluir os projetos é decisão do proprietário.
+
+### Monitoramento
+
+`.github/workflows/uptime.yml` testa `/ready` a cada 15 minutos, por fora do Railway, e a ingestão INPE de staging. Mantém uma issue aberta enquanto houver falha. Só roda depois de chegar ao branch padrão da API, e produção entra com a variável `UPTIME_PRODUCTION=true`. Detecta queda em cerca de 15 a 30 minutos; não é alerta em tempo real. Notificações de deploy no painel do Railway dependem do proprietário.
 
 ## 7. Provisionamento (executado em 04/11/2026) e como repetir
 

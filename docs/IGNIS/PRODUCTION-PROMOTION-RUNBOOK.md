@@ -7,21 +7,25 @@ Regras:
 - Não apagar branches durante a sequência.
 - Não pular check vermelho.
 
-Referência dos commits verificados em 05/11/2026: no web, os HEADs de `feat/ignis-admin-cockpit` e de `staging` são iguais. Na API, `feat/ignis-admin-cockpit` está à frente de `staging` apenas com commits de teste e documentação (`git diff --stat origin/staging origin/feat/ignis-admin-cockpit`), então o código em execução é o mesmo. O SHA final aparece no relatório de encerramento da missão; confira com `git ls-remote` antes de começar.
+Os commits promovidos são os **merge commits** gerados nos §§1 e 2 (`M_API` e `M_WEB`), que ainda não existem. A árvore de cada um deve ser idêntica à do topo da pilha (conferência nos §§1 e 2). Confira os HEADs com `git ls-remote` antes de começar.
+
+Atualizado em 05/11/2026, depois da preparação final. Os rulesets já exigem PR, merge commit e checks verdes em `main` e `master`.
 
 ## 0. Pré-requisitos (antes do primeiro merge)
 
-| # | Quem | Ação | Por quê | Como conferir |
-|---|---|---|---|---|
-| P1 | Proprietário | GitGuardian, no painel, depois de conferir a evidência ao lado, e reexecutar o check em cada PR: **33462092** (api #3) como *Test credential*; **39541748–39541751** (api #8) como *False positive*; **39592651** (api #9) e **39592652** (web #8) como *Test credential* | O check está vermelho nesses 4 PRs. Evidência de 05/11/2026; nenhum valor coincide com segredos do Railway ou de `.staging.env` (comparação sem expor valores). 33462092: senha demo já publicada, ainda em `README.md` e `seed/seed_users.py`, recusada por `app/core/passwords.py`; o seed é recusado em staging e produção. **Não é falso positivo.** 39541748–51: referências a variáveis e geradores de `/dev/urandom` em `deploy/local/`, sem literal. 39592651/2: ver ADMIN-SECURITY-REVIEW §11; ausentes em `HEAD`. Sem regra de proteção, o GitHub deixaria mergear mesmo vermelho: **isso seria ignorar verificação** | `gh pr checks <n>` sem `fail` |
-| P2 | Proprietário | **Vercel:** desconectar o repositório `ignis-fire-watch` dos dois projetos (`ignis-fire-watch` e `ignis-fire-watch-main`) | O projeto Vercel publicava `master`. O merge único do §2 já traz o `vercel.json` que desliga os deploys (o web #4 sozinho ainda traz o antigo), mas só a desconexão elimina o risco. A conta Vercel conectada a esta sessão não enxerga esses projetos, então o vínculo **não foi confirmado** | Painel da Vercel; nenhum `vercel[bot]` novo em `repos/…/deployments` |
-| P3 | Proprietário | **Web:** criar a tag `archive/lovable-main-2025` e trocar o branch padrão para `master` (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`) | O padrão hoje é `main`, de histórico sem relação com `master`. `workflow_dispatch` só existe para workflows presentes no branch padrão: sem isso, o `promote.yml` do web não pode ser disparado | `gh api repos/eliasandraade/ignis-fire-watch --jq .default_branch` = `master` |
-| P4 | Proprietário | GitHub, nos dois repositórios: environment `production` com *Required reviewers* = proprietário; rulesets em `production`, `staging` e no branch padrão (RAILWAY-DEPLOYMENT §6) | Hoje não há nenhuma regra. O environment não existe na API (seria criado sem proteção no 1º uso) e, no web, só existe o `Production` criado pela Vercel, sem regra; o nome não diferencia maiúsculas. Sem revisores, o `promote.yml` não pede aprovação | `gh api repos/…/environments` mostra `required_reviewers` |
-| P5 | Proprietário | Selar `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` nos dois ambientes | 0 variáveis seladas hoje | Railway → *Variables* |
-| P6 | Proprietário | Decidir a ingestão em produção (D-6) | Sem ela, o mapa de produção abre vazio, com a fonte em "nunca executada": honesto, mas sem dados para validar | Ver §5 |
-| P7 | Proprietário | **Autorização explícita de merge** | Exigida pela missão | — |
-| P8 | Proprietário + execução | Autorizar e executar o teste de restauração (H-22) | Os backups existem e estão agendados, mas nenhuma restauração foi testada. Um `pg_dump` exige chave SSH própria do IGNIS; restaurar o volume de staging substitui o conteúdo dele | HOMOLOGATION-CHECKLIST H-22 |
-| P9 | Proprietário | SonarCloud do web: criar o projeto ou decidir seguir sem ele | O PR web #8 não tem check de Quality Gate, e `eliasandraade_ignis-fire-watch` não é encontrado na API pública (o projeto pode ser privado). Na API, o Quality Gate do #9 está `OK` | Check `SonarCloud Code Analysis` no PR web #8 |
+| # | Condição | Estado | Como conferir |
+|---|---|---|---|
+| P1 | GitGuardian classificado pelo proprietário | **Feito.** O check passa nos HEADs novos; PRs antigos só reavaliam em nova execução | `gh pr checks` nos PRs do topo da pilha |
+| P2 | Vercel não publica a partir de `master` | **Decisão pendente.** O merge do web leva o `vercel.json` que desliga deploys por Git. A desconexão fica para quando o proprietário confirmar que a entrega acadêmica não precisa ficar no ar (`ignis-fire-watch/docs/IGNIS/BRANCH-STRATEGY.md`) | Painel da Vercel |
+| P3 | `promote.yml` do web pode ser disparado | **Feito**, por tag `promote/*`, sem trocar o branch padrão. Gatilho e espera de aprovação testados em 05/11/2026 | §4 |
+| P4 | Environment `production` e rulesets | **Feito** nos dois repositórios (RAILWAY-DEPLOYMENT §6) | `gh api repos/…/environments/production`, `gh api repos/…/rulesets` |
+| P5 | Segredos selados | **Feito** nos dois ambientes. Valor conferido por hash dentro do container de staging depois do redeploy | Railway → *Variables* |
+| P6 | Decidir a ingestão INPE em produção (D-6) | **Decisão pendente.** Sem ela, o mapa abre vazio. NASA FIRMS segue desligada na versão inicial | §5 |
+| P7 | Autorização explícita de merge e promoção | **Pendente** | — |
+| P8 | Teste de restauração (H-22) | **Feito** com `pg_dump` em banco descartável (RAILWAY-PROVISIONING-REPORT §14). A restauração nativa de volume do Railway **não** foi testada, pois substituiria o volume | HOMOLOGATION-CHECKLIST H-22 |
+| P9 | SonarCloud do web | **Decisão pendente.** O projeto não existe na conta pública: criar ou seguir sem ele. Não é check obrigatório no ruleset do web | Sonar |
+| P10 | Aviso de privacidade | **Decisão pendente.** Rascunho em [PRIVACY-NOTICE-DRAFT.md](PRIVACY-NOTICE-DRAFT.md); não publicado | §6 |
+| P11 | Alertas no Railway | **Pendente (proprietário).** Ligar as notificações de deploy no painel. O monitor externo entra com o merge (`uptime.yml`) | §6 |
 
 ## 1. Merge da API (`ignis-orbital-api`, base `main`)
 
@@ -41,7 +45,7 @@ gh pr checks 9 --repo $R
 gh pr merge 9 --repo $R --merge
 ```
 
-Só rode o `gh pr merge` com o `gh pr checks` sem `fail` (a mudança de base pode fazer o GitGuardian reavaliar a pilha inteira; os incidentes de P1 cobrem isso).
+Só rode o `gh pr merge` com o `gh pr checks` sem `fail`. A mudança de base pode fazer o GitGuardian reavaliar a pilha inteira; os incidentes de P1 cobrem isso. O ruleset `integracao` recusa o merge com check obrigatório vermelho.
 
 Depois do merge:
 - O #3 deve aparecer como *merged* automaticamente, pois seu head já está em `main`. Confira.
@@ -66,7 +70,7 @@ git diff --stat origin/staging origin/main
 
 ## 2. Merge do web (`ignis-fire-watch`, base `master`)
 
-**Só depois de P2 e P3.**
+O branch padrão do web continua `main`; a base deste PR é `master`, e nada entra em `main`.
 
 ```bash
 R=eliasandraade/ignis-fire-watch
@@ -114,21 +118,30 @@ gh workflow run promote.yml --repo eliasandraade/ignis-orbital-api -f sha=$M_API
    railway deployment list --service ignis-api --environment production
    ```
 3. Confirmar no log: "inseridas 185", "Seed demonstrativo ignorado", `/ready` 200.
-4. Só então promover o web:
+4. Só então promover o web. Depois de conferir a CI de push em `M_WEB`, use uma tag, pois `main` é o branch padrão do web e o GitHub não oferece `workflow_dispatch` para workflows fora dele:
    ```bash
-   gh workflow run promote.yml --repo eliasandraade/ignis-fire-watch -f sha=$M_WEB
+   git tag promote/AAAAMMDD-HHMM "$M_WEB"
+   ```
+   ```bash
+   git push origin promote/AAAAMMDD-HHMM
    ```
 5. Aprovar e acompanhar.
+6. Ligar o monitor de produção:
+   ```bash
+   gh variable set UPTIME_PRODUCTION --repo eliasandraade/ignis-orbital-api --body true
+   ```
 
-**Ponto ainda não testado (H-15):** o push feito pelo `GITHUB_TOKEN` não dispara nova CI, e o Railway deve aproveitar as *check suites* do mesmo SHA. Se o deploy não aparecer ou ficar parado em `WAITING`, **não** faça push manual em `production`. Dispare o mesmo SHA pelo painel do Railway (*Deploy*), depois de confirmar a CI verde.
+O ruleset de `production` exige os checks da CI no SHA promovido e recusa force-push e exclusão. **Ele não impede push direto do proprietário:** o GitHub não aceita o app *GitHub Actions* como exceção de ruleset em repositório pessoal, e restringir atualizações bloquearia o próprio `promote.yml`. O limite é a regra deste runbook: nada de `git push` manual em `production`.
+
+**Ainda não testado (H-15), pois exigiria publicar:** o push real em `production`. O gatilho e a espera de aprovação foram testados no web em 05/11/2026 (tag em commit fora de `master`, execução cancelada e tag apagada, sem nenhuma etapa executada). O push feito pelo `GITHUB_TOKEN` não dispara nova CI, e o Railway deve aproveitar as *check suites* do mesmo SHA. Se o deploy não aparecer ou ficar parado em `WAITING`, **não** faça push manual em `production`. Dispare o mesmo SHA pelo painel do Railway (*Deploy*), depois de confirmar a CI verde.
 
 ## 5. Ingestão em produção (decisão D-6, opcional)
 
-A ingestão usa só dados públicos do INPE e não coleta dados pessoais. Se autorizada, em um PR próprio:
+A ingestão usa só dados públicos do INPE e não coleta dados pessoais. A NASA FIRMS fica desligada na versão inicial, sem chave configurada, até haver homologação. Se o INPE for autorizado, em um PR próprio:
 
 1. Mudar `INGEST.production` em `.railway/railway.ts` e ajustar a checagem correspondente em `contract.check.ts`.
 2. `service: true`, `cron: false` no primeiro momento.
-3. Gerar um `JWT_SECRET_KEY` próprio para `ignis-ingest` por stdin.
+3. Gerar um `JWT_SECRET_KEY` próprio para `ignis-ingest` por stdin e selar.
 4. Aplicar, validar uma rodada manual e só então ligar `cron: true`.
 
 ## 6. Primeiro administrador e verificação final
@@ -149,7 +162,7 @@ A ingestão usa só dados públicos do INPE e não coleta dados pessoais. Se aut
 | Migração ou healthcheck falha na API | O deploy não entra no ar. Domínio segue em 404. Investigar o log; o banco está vazio, sem risco de dados |
 | Regressão no web ou na API | Railway → *Deployments* → *Rollback* para o deploy anterior (8 s no teste em staging). **Não** retroceder branches |
 | Primeiro deploy do web com problema (sem versão anterior) | Remover o deploy no Railway: o domínio volta a responder 404 |
-| Vazamento de segredo | Gerar novo valor por stdin, selar e redeployar |
+| Vazamento de segredo | Gerar novo valor por stdin, selar e redeployar. Valores selados não podem ser lidos nem deselados |
 
 Nunca: force-push, `alembic downgrade` sem backup, ou abrir denúncias (`PUBLIC_REPORTS_ENABLED`) antes da decisão LGPD (D-1).
 

@@ -14,7 +14,7 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 | H-02 | Branch de cada ambiente | Railway → serviço → *Source* | staging: `staging`; production: `production` | OK |
 | H-03 | *Wait for CI* ativo | `config plan` sem diferença em `source.checkSuites`; deploys `WAITING` até a CI | Ligado em `ignis-api`, `ignis-web`, `ignis-ingest` | OK (deploys `WAITING` → `SUCCESS`/`SKIPPED` observados) |
 | H-04 | Banco e API sem exposição pública | Railway → *Networking* | Só o `ignis-web` tem domínio; sem TCP proxy | OK |
-| H-05 | Segredos distintos por ambiente e selados | Railway → *Variables* | Gerados por ambiente; selados | Gerados por ambiente (stdin). **Selagem pendente (B7)** |
+| H-05 | Segredos distintos por ambiente e selados | Railway → *Variables* | Gerados por ambiente; selados | **OK (05/11/2026).** `POSTGRES_PASSWORD` e `JWT_SECRET_KEY` selados nos dois ambientes; CLI retorna nulo e o `DATABASE_URL` lido pelo CLI não traz a senha; valor íntegro no container de staging, por hash |
 | H-06 | Guarda de ambiente | `APP_ENV=production` temporário no `ignis-api` de staging | O pre-deploy falha; a versão anterior continua | — (coberto por teste; não repetido no Railway) |
 
 ## B. API
@@ -63,7 +63,7 @@ Coluna **Staging 04/11/2026**: o resultado executado nesta data. "—" indica it
 
 | # | Verificação | Como | Esperado | Staging 04/11/2026 |
 |---|---|---|---|---|
-| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | Agendados. Produção: 1º diário OK (04/11 21:43 UTC). Staging: 1º diário OK (05/11 02:06 UTC). **Restauração não testada** |
+| H-22 | Backup e restauração | Backup de volume + `pg_dump`; restaurar num serviço temporário | Restauração íntegra | **`pg_dump` OK (05/11/2026)** em banco descartável: 17 tabelas com contagens e hash de linhas idênticos, API respondeu `/ready` 200 (RAILWAY-PROVISIONING-REPORT §14). Restauração nativa de volume não testada, pois substituiria o volume. Backups diários agendados |
 | H-23 | Rollback | Rollback para o deploy anterior do `ignis-web` | Volta em < 5 min; `/healthz` ok | OK: 8 s para voltar e 8 s para avançar |
 | H-24 | Alertas | Forçar falha | O alerta chega | **Pendente (B8)** |
 | H-37 | Reinício | Restart do `ignis-postgis` e do `ignis-api` | Dados preservados; `/ready` ok | OK (2 s; 320 focos e 184 municípios preservados) |
