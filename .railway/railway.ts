@@ -71,12 +71,14 @@ export const API_PORT = "8000";
  *  - service: exists in the environment (a deploy runs one round, then exits);
  *  - cron:    re-runs every 15 minutes.
  * Staging: manual rounds validated on 2026-11-04 (INPE ok, idempotent, source
- * outage recorded as unavailable), then the cron was enabled. Production: off
- * until the owner authorises it after staging homologation.
+ * outage recorded as unavailable), then the cron was enabled. Production: the
+ * owner approved INPE ingestion on 2026-11-06. The service exists with the cron
+ * off; turning the cron on requires the first API deploy validated, a successful
+ * manual round and the no-duplicate check (PRODUCTION-PROMOTION-RUNBOOK.md §5).
  */
 export const INGEST: Record<IgnisEnvironment, { service: boolean; cron: boolean }> = {
   staging: { service: true, cron: true },
-  production: { service: false, cron: false },
+  production: { service: true, cron: false },
 };
 export const INGEST_CRON = "*/15 * * * *";
 

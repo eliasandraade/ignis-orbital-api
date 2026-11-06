@@ -67,7 +67,7 @@ for (const env of ["staging", "production"] as const) {
   const services = resources.filter((r) => r.type === "service") as ServiceNode[];
   const fromGithub = services.filter((n) => n.name !== "ignis-postgis");
 
-  check(`${env}: resources (ingestion only where authorised, never in production yet)`, () => {
+  check(`${env}: resources (production ingestion exists with the cron off)`, () => {
     const expected = [
       "service.ignis-api",
       "service.ignis-postgis",
@@ -77,7 +77,7 @@ for (const env of ["staging", "production"] as const) {
     ].sort();
     assert.deepEqual(resources.map((r) => r.address).sort(), expected);
     assert.equal(INGEST.production.cron, false, "production cron needs owner authorisation");
-    assert.equal(INGEST.production.service, false, "production ingestion needs owner authorisation");
+    assert.equal(INGEST.production.service, true, "production ingestion approved by the owner on 2026-11-06");
   });
 
   check(`${env}: deploys wait for GitHub Actions and track the environment branch`, () => {
@@ -196,6 +196,8 @@ for (const env of ["staging", "production"] as const) {
       assert.equal(literal(job, "MIGRATE_ON_START"), "false");
       assert.equal(job.networking, undefined);
       preserved(job, "JWT_SECRET_KEY");
+      assert.equal(literal(job, "INPE_QUEIMADAS_ENABLED"), "true");
+      assert.equal(job.variables?.NASA_FIRMS_MAP_KEY, undefined, "NASA FIRMS stays disabled");
     }
     assert.equal(INGEST_CRON, "*/15 * * * *");
   });
